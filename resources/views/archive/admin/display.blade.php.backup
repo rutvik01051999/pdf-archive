@@ -1,0 +1,1319 @@
+@extends('admin.layouts.app')
+
+@section('content')
+    @include('admin.layouts.partials.page-header', [
+        'title' => 'Archive Display',
+        'breadcrumb' => [
+            'Home' => route('admin.dashboard.index'),
+            'Archive' => route('admin.archive.categories'),
+            'Display' => route('admin.archive.display'),
+        ]
+    ])
+
+    @include('admin.layouts.partials.alert')
+
+    <!-- Archive Search Form -->
+    <div class="row">
+        <div class="col-xl-12">
+            <div class="card custom-card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="bx bx-search me-2"></i>
+                        Archive Search & Filter
+                    </div>
+                    <div class="card-tools">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="resetFilters">
+                            <i class="bx bx-refresh me-1"></i> Reset
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form name="frmSearch" method="post" id="archiveSearchForm">
+                        @csrf
+                        <div class="row g-3">
+                            <div class="col-md-2">
+                                <label for="center" class="form-label">Center</label>
+                                <select class="form-select center" name="center" id="center">
+                                    <option value="">All Centers</option>
+                                    @foreach($centers as $center)
+                                        <option value="{{ $center->centercode }}">{{ $center->description }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="pno" class="form-label">Page No</label>
+                                <select class="form-select" name="pno" id="pno">
+                                    <option value="">All Pages</option>
+                                    @for($i = 1; $i <= 100; $i++)
+                                        <option value="{{ $i }}">{{ $i }}</option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="category" class="form-label">Category</label>
+                                <select class="form-select" name="category" id="category">
+                                    <option value="">All Categories</option>
+                                    @foreach($categories as $category)
+                                        <option value="{{ $category->category }}">{{ $category->category }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="startdate" class="form-label">From Date</label>
+                                <input class="form-control" type="date" placeholder="From Date" value="{{ date('Y-m-d') }}" name="startdate" id="startdate">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="enddate" class="form-label">To Date</label>
+                                <input class="form-control" type="date" id="enddate" placeholder="To Date" value="{{ date('Y-m-d') }}" name="enddate">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">&nbsp;</label>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-primary SearchForm" name="go">
+                                        <i class="bx bx-search me-1"></i> Search
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Quick Filters -->
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="text-muted small">Quick Filters:</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-category="Matrix Auto">Matrix Auto</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-category="News">News</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-category="Sports">Sports</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary quick-filter" data-date="today">Today</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary quick-filter" data-date="week">This Week</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Summary & Controls -->
+    <div class="row">
+        <div class="col-xl-12">
+            <div class="card custom-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="results-info">
+                            <h6 class="mb-0">
+                                <i class="bx bx-archive me-2"></i>
+                                <span id="TotalVisibleArchive">Showing 0 - </span>
+                                <span id="TotalArchive">0</span> Archives
+                            </h6>
+                        </div>
+                        <div class="view-controls">
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="viewMode" id="gridView" value="grid" checked>
+                                <label class="btn btn-outline-primary btn-sm" for="gridView">
+                                    <i class="bx bx-grid-alt"></i>
+                                </label>
+                                <input type="radio" class="btn-check" name="viewMode" id="listView" value="list">
+                                <label class="btn btn-outline-primary btn-sm" for="listView">
+                                    <i class="bx bx-list-ul"></i>
+                                </label>
+                            </div>
+                            <div class="btn-group ms-2" role="group">
+                                <button class="btn btn-outline-secondary btn-sm" id="refreshResults">
+                                    <i class="bx bx-refresh"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Archive Search Results -->
+    <div class="row" id="ArchiveSearchRes">
+        <!-- Search results will be displayed here -->
+    </div>
+
+    <!-- Archive Results Grid -->
+    <div class="row" id="ResultNew">
+        @if($archives->count() > 0)
+            @foreach($archives as $archive)
+                @php
+                    // Generate thumbnail path based on filepath (same logic as mypdfarchive)
+                    $thumbnailUrl = null;
+                    if ($archive->filepath) {
+                        $path = explode("/", $archive->filepath);
+                        if (count($path) >= 5) {
+                            // Same thumbnail generation logic as mypdfarchive
+                            $thumbnailPath = 'epaper-pdfarchive-live-bucket/PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
+                            $thumbnailUrl = 'https://storage.googleapis.com/' . $thumbnailPath;
+                        }
+                    }
+                @endphp
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                    <div class="archive-item">
+                        <div class="archive-thumbnail-container">
+                            <img src="{{ $thumbnailUrl ?: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K' }}" 
+                                class="archive-thumbnail" 
+                                alt="{{ $archive->title ?: 'Archive' }}" 
+                                onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K'">
+                        </div>
+                        <div class="archive-info">
+                            <div class="archive-page">Page {{ $archive->edition_pageno ?? 'N/A' }}</div>
+                            <div class="archive-category">{{ $archive->category ?? 'N/A' }}</div>
+                        </div>
+                        <div class="archive-actions">
+                            <button class="btn btn-icon" onclick="viewArchive({{ $archive->id }})" title="View Document">
+                                <i class="bx bx-file"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="confirmation({{ $archive->id }})" title="Delete">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="editArchive({{ $archive->id }})" title="Edit">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="downloadArchive({{ $archive->id }})" title="Download">
+                                <i class="bx bx-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            @endforeach
+        @else
+            <div class="col-12 text-center">
+                <div class="alert alert-info">
+                    <i class="bx bx-info-circle me-2"></i>
+                    No archives found. Upload some PDFs to get started.
+                </div>
+            </div>
+        @endif
+    </div>
+
+    <!-- Pagination -->
+    <div class="row">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=3" class="archive-thumbnail" alt="Archive 3">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -3291</div>
+                    <div class="archive-category">Sports</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(3)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(3)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(3)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(3)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=4" class="archive-thumbnail" alt="Archive 4">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -1563</div>
+                    <div class="archive-category">Business</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(4)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(4)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(4)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(4)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=5" class="archive-thumbnail" alt="Archive 5">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -2874</div>
+                    <div class="archive-category">Entertainment</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(5)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(5)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(5)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(5)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=6" class="archive-thumbnail" alt="Archive 6">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -2026</div>
+                    <div class="archive-category">Matrix Auto</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(6)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(6)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(6)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(6)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=7" class="archive-thumbnail" alt="Archive 7">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -4521</div>
+                    <div class="archive-category">Sports</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(7)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(7)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(7)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(7)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=8" class="archive-thumbnail" alt="Archive 8">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -3892</div>
+                    <div class="archive-category">News</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(8)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(8)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(8)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(8)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=9" class="archive-thumbnail" alt="Archive 9">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -2147</div>
+                    <div class="archive-category">Matrix Auto</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(9)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(9)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(9)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(9)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+            <div class="archive-item">
+                <div class="archive-thumbnail-container">
+                    <img src="https://picsum.photos/300/400?random=10" class="archive-thumbnail" alt="Archive 10">
+                </div>
+                <div class="archive-info">
+                    <div class="archive-page">Page -5736</div>
+                    <div class="archive-category">Business</div>
+                </div>
+                <div class="archive-actions">
+                    <button class="btn btn-icon" onclick="viewArchive(10)" title="View Document">
+                        <i class="bx bx-file"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="confirmation(10)" title="Delete">
+                        <i class="bx bx-trash"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="editArchive(10)" title="Edit">
+                        <i class="bx bx-edit"></i>
+                    </button>
+                    <button class="btn btn-icon" onclick="downloadArchive(10)" title="Download">
+                        <i class="bx bx-download"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="row">
+        <div class="col-xl-12">
+            <div class="card custom-card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="pagination-info">
+                            <small class="text-muted">
+                                <span id="TotalVisibleArchiveBottom">Showing 0 - </span>
+                                <span id="TotalArchiveBottom">0</span> of 
+                                <span id="TotalArchiveCount">0</span> archives
+                            </small>
+                        </div>
+                        <div class="pagination-controls">
+                            <button class="btn btn-outline-primary btn-sm PreviousPagination" type="button" disabled>
+                                <i class="bx bx-chevron-left"></i> Previous
+                            </button>
+                            <span class="mx-3">
+                                Page <span id="currentPage">1</span> of <span id="totalPages">1</span>
+                            </span>
+                            <button class="btn btn-outline-primary btn-sm NextPagination" type="button" disabled>
+                                Next <i class="bx bx-chevron-right"></i>
+                            </button>
+                        </div>
+                        <div class="items-per-page">
+                            <select class="form-select form-select-sm" id="itemsPerPage" style="width: auto;">
+                                <option value="12">12 per page</option>
+                                <option value="18" selected>18 per page</option>
+                                <option value="24">24 per page</option>
+                                <option value="36">36 per page</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+@endsection
+
+@push('scripts')
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+// Sample archive data with random images - Global variable
+var sampleArchives = [
+        {
+            id: 1,
+            title: "Mumbai Edition - Page 1",
+            category: "Matrix Auto",
+            center: "Mumbai",
+            date: "2024-01-15",
+            thumbnail: "https://picsum.photos/300/400?random=1",
+            page: 2025
+        },
+        {
+            id: 2,
+            title: "Delhi News - Page 5",
+            category: "News",
+            center: "Delhi",
+            date: "2024-01-15",
+            thumbnail: "https://picsum.photos/300/400?random=2",
+            page: 1847
+        },
+        {
+            id: 3,
+            title: "Bangalore Sports - Page 8",
+            category: "Sports",
+            center: "Bangalore",
+            date: "2024-01-15",
+            thumbnail: "https://picsum.photos/300/400?random=3",
+            page: 3291
+        },
+        {
+            id: 4,
+            title: "Chennai Business - Page 3",
+            category: "Business",
+            center: "Chennai",
+            date: "2024-01-15",
+            thumbnail: "https://picsum.photos/300/400?random=4",
+            page: 1563
+        },
+        {
+            id: 5,
+            title: "Kolkata Entertainment - Page 12",
+            category: "Entertainment",
+            center: "Kolkata",
+            date: "2024-01-15",
+            thumbnail: "https://picsum.photos/300/400?random=5",
+            page: 2874
+        },
+        {
+            id: 6,
+            title: "Mumbai Auto - Page 2",
+            category: "Matrix Auto",
+            center: "Mumbai",
+            date: "2024-01-14",
+            thumbnail: "https://picsum.photos/300/400?random=6",
+            page: 2026
+        },
+        {
+            id: 7,
+            title: "Delhi Sports - Page 15",
+            category: "Sports",
+            center: "Delhi",
+            date: "2024-01-14",
+            thumbnail: "https://picsum.photos/300/400?random=7",
+            page: 4521
+        },
+        {
+            id: 8,
+            title: "Bangalore News - Page 7",
+            category: "News",
+            center: "Bangalore",
+            date: "2024-01-14",
+            thumbnail: "https://picsum.photos/300/400?random=8",
+            page: 3892
+        },
+        {
+            id: 9,
+            title: "Chennai Auto - Page 4",
+            category: "Matrix Auto",
+            center: "Chennai",
+            date: "2024-01-13",
+            thumbnail: "https://picsum.photos/300/400?random=9",
+            page: 2147
+        },
+        {
+            id: 10,
+            title: "Kolkata Business - Page 9",
+            category: "Business",
+            center: "Kolkata",
+            date: "2024-01-13",
+            thumbnail: "https://picsum.photos/300/400?random=10",
+            page: 5736
+        }
+    ];
+
+$(document).ready(function(){
+    // Date picker initialization removed - using HTML5 date inputs instead
+
+    // Initialize page with sample data
+    showSampleResults();
+    
+    // Search form submission
+    $(".SearchForm").click(function(){
+        showSearchResults();
+        console.log('SearchForm clicked');
+    });
+
+    // Pagination handlers
+    $(".PreviousPagination").click(function(){
+        Swal.fire({
+            icon: 'info',
+            title: 'Previous Page',
+            text: 'Pagination functionality will be implemented later',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    });
+
+    $(".NextPagination").click(function(){
+        Swal.fire({
+            icon: 'info',
+            title: 'Next Page',
+            text: 'Pagination functionality will be implemented later',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    });
+});
+
+    // Show search results matching the image format
+    function showSearchResults() {
+        console.log('showSearchResults function called');
+        var html = `
+            <div class="row">
+                <!-- Ahmedabad Botad Bhaskar Page 1 -->
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                    <div class="archive-item">
+                        <div class="archive-title-bar">Ahmedabad Botad Bhaskar Page 1</div>
+                        <div class="archive-thumbnail-container">
+                            <img src="https://picsum.photos/300/400?random=1" class="archive-thumbnail" alt="Ahmedabad Botad Bhaskar Page 1">
+                        </div>
+                        <div class="archive-category-label">Matrix Auto</div>
+                        <div class="archive-actions">
+                            <button class="btn btn-icon" onclick="viewArchive(1)" title="View Document">
+                                <i class="bx bx-file"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="confirmation(1)" title="Delete">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="editArchive(1)" title="Edit">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="downloadArchive(1)" title="Download">
+                                <i class="bx bx-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ahmedabad Botad Bhaskar Page 2 -->
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                    <div class="archive-item">
+                        <div class="archive-title-bar">Ahmedabad Botad Bhaskar Page 2</div>
+                        <div class="archive-thumbnail-container">
+                            <img src="https://picsum.photos/300/400?random=2" class="archive-thumbnail" alt="Ahmedabad Botad Bhaskar Page 2">
+                        </div>
+                        <div class="archive-category-label">Matrix Auto</div>
+                        <div class="archive-actions">
+                            <button class="btn btn-icon" onclick="viewArchive(2)" title="View Document">
+                                <i class="bx bx-file"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="confirmation(2)" title="Delete">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="editArchive(2)" title="Edit">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="downloadArchive(2)" title="Download">
+                                <i class="bx bx-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ahmedabad Botad Bhaskar Page 3 -->
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                    <div class="archive-item">
+                        <div class="archive-title-bar">Ahmedabad Botad Bhaskar Page 3</div>
+                        <div class="archive-thumbnail-container">
+                            <img src="https://picsum.photos/300/400?random=3" class="archive-thumbnail" alt="Ahmedabad Botad Bhaskar Page 3">
+                        </div>
+                        <div class="archive-category-label">Matrix Auto</div>
+                        <div class="archive-actions">
+                            <button class="btn btn-icon" onclick="viewArchive(3)" title="View Document">
+                                <i class="bx bx-file"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="confirmation(3)" title="Delete">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="editArchive(3)" title="Edit">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="downloadArchive(3)" title="Download">
+                                <i class="bx bx-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Ahmedabad Botad Bhaskar Page 4 -->
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                    <div class="archive-item">
+                        <div class="archive-title-bar">Ahmedabad Botad Bhaskar Page 4</div>
+                        <div class="archive-thumbnail-container">
+                            <img src="https://picsum.photos/300/400?random=4" class="archive-thumbnail" alt="Ahmedabad Botad Bhaskar Page 4">
+                        </div>
+                        <div class="archive-category-label">Matrix Auto</div>
+                        <div class="archive-actions">
+                            <button class="btn btn-icon" onclick="viewArchive(4)" title="View Document">
+                                <i class="bx bx-file"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="confirmation(4)" title="Delete">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="editArchive(4)" title="Edit">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="downloadArchive(4)" title="Download">
+                                <i class="bx bx-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        $("#ResultNew").html(html);
+        
+        // Update pagination info
+        updatePaginationInfo(1, 1, 4, 4);
+    }
+
+    // Show sample results
+    function showSampleResults() {
+        // Safety check for sampleArchives
+        if (typeof sampleArchives === 'undefined' || !Array.isArray(sampleArchives)) {
+            console.error('sampleArchives is not defined or not an array');
+            $("#Result").html('<div class="col-12"><p class="text-center text-muted">No data available</p></div>');
+            return;
+        }
+        
+        var viewMode = $('input[name="viewMode"]:checked').val();
+        var itemsPerPage = parseInt($('#itemsPerPage').val());
+        
+        // Filter data based on form values
+        var filteredData = filterSampleData(sampleArchives);
+        
+        // Generate HTML based on view mode
+        var html = '';
+        if (viewMode === 'grid') {
+            html = generateGridView(filteredData, itemsPerPage);
+        } else {
+            html = generateListView(filteredData, itemsPerPage);
+        }
+        
+        $("#Result").html(html);
+        
+        // Update pagination info
+        var totalItems = filteredData.length;
+        var currentPage = 1;
+        var totalPages = Math.ceil(totalItems / itemsPerPage);
+        
+        updatePaginationInfo(currentPage, totalPages, totalItems, itemsPerPage);
+    }
+
+    // Filter sample data based on form values
+    function filterSampleData(data) {
+        // Safety check to prevent undefined error
+        if (!data || !Array.isArray(data)) {
+            return [];
+        }
+        
+        var center = $('#center').val();
+        var category = $('#category').val();
+        var pno = $('#pno').val();
+        
+        return data.filter(function(item) {
+            if (center && item.center !== getCenterName(center)) return false;
+            if (category && item.category !== category) return false;
+            if (pno && !item.title.includes('Page ' + pno)) return false;
+            return true;
+        });
+    }
+
+    // Get center name from code
+    function getCenterName(code) {
+        if (!code) return '';
+        
+        var centers = {
+            '001': 'Mumbai',
+            '002': 'Delhi',
+            '003': 'Bangalore',
+            '004': 'Chennai',
+            '005': 'Kolkata'
+        };
+        return centers[code] || code; // Return the code itself if not found
+    }
+
+    // Generate grid view HTML
+    function generateGridView(data, itemsPerPage) {
+        // Safety check for data
+        if (!data || !Array.isArray(data)) {
+            return '<div class="row"><div class="col-12"><p class="text-center text-muted">No data available</p></div></div>';
+        }
+        
+        var html = '<div class="row">';
+        data.slice(0, itemsPerPage).forEach(function(item, index) {
+            html += `
+                <div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">
+                    <div class="archive-item">
+                        <div class="archive-thumbnail-container">
+                            <img src="${item.thumbnail}" class="archive-thumbnail" alt="${item.title}" onerror="this.src='/images/no-image.png'">
+                        </div>
+                        <div class="archive-info">
+                            <div class="archive-page">Page -${item.page || Math.floor(Math.random() * 9000) + 1000}</div>
+                            <div class="archive-category">${item.category}</div>
+                        </div>
+                        <div class="archive-actions">
+                            <button class="btn btn-icon" onclick="viewArchive(${item.id})" title="View Document">
+                                <i class="bx bx-file"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="confirmation(${item.id})" title="Delete">
+                                <i class="bx bx-trash"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="editArchive(${item.id})" title="Edit">
+                                <i class="bx bx-edit"></i>
+                            </button>
+                            <button class="btn btn-icon" onclick="downloadArchive(${item.id})" title="Download">
+                                <i class="bx bx-download"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        return html;
+    }
+
+    // Generate list view HTML
+    function generateListView(data, itemsPerPage) {
+        var html = '<div class="list-view">';
+        data.slice(0, itemsPerPage).forEach(function(item, index) {
+            html += `
+                <div class="archive-list-item">
+                    <div class="row align-items-center">
+                        <div class="col-md-1">
+                            <img src="${item.thumbnail}" class="archive-list-thumbnail" alt="${item.title}" onerror="this.src='/images/no-image.png'">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="archive-list-title">${item.title}</div>
+                            <div class="archive-list-meta">
+                                <span class="badge bg-primary me-2">${item.category}</span>
+                                <span class="text-muted">
+                                    <i class="bx bx-map me-1"></i>${item.center}
+                                    <i class="bx bx-calendar ms-2 me-1"></i>${item.date}
+                                </span>
+                            </div>
+                        </div>
+                        <div class="col-md-5 text-end">
+                            <div class="archive-list-actions">
+                                <button class="btn btn-sm btn-outline-info me-1" onclick="viewArchive(${item.id})" title="View">
+                                    <i class="bx bx-show"></i> View
+                                </button>
+                                <button class="btn btn-sm btn-outline-success me-1" onclick="downloadArchive(${item.id})" title="Download">
+                                    <i class="bx bx-download"></i> Download
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="confirmation(${item.id})" title="Delete">
+                                    <i class="bx bx-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        return html;
+    }
+
+    // Update pagination information
+    function updatePaginationInfo(currentPage, totalPages, totalItems, itemsPerPage) {
+        var startItem = ((currentPage - 1) * itemsPerPage) + 1;
+        var endItem = Math.min(currentPage * itemsPerPage, totalItems);
+        
+        $("#TotalVisibleArchive").text(`Showing ${startItem} - ${endItem} of `);
+        $("#TotalVisibleArchiveBottom").text(`Showing ${startItem} - ${endItem} of `);
+        $("#TotalArchive").text(totalItems);
+        $("#TotalArchiveBottom").text(endItem);
+        $("#TotalArchiveCount").text(totalItems);
+        $("#currentPage").text(currentPage);
+        $("#totalPages").text(totalPages);
+        
+        // Update pagination buttons
+        $(".PreviousPagination").prop('disabled', currentPage <= 1);
+        $(".NextPagination").prop('disabled', currentPage >= totalPages);
+    }
+
+    // Download log function (simplified)
+    function download_log(alias, download_url, date, ccode, edition_code, pageno) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Download',
+            text: 'Download functionality will be implemented later',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // Confirmation function for delete (simplified)
+    function confirmation(ID) {
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This is a demo. No actual deletion will occur.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Yes, delete it!'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Deleted!',
+                    text: 'Archive deletion functionality will be implemented later.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            }
+        });
+    }
+
+    // View archive function
+    function viewArchive(id) {
+        Swal.fire({
+            icon: 'info',
+            title: 'View Archive',
+            text: 'Archive viewing functionality will be implemented later',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // Edit archive function
+    function editArchive(id) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Edit Archive',
+            text: `Editing archive ID: ${id}. This is a sample view.`,
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // Download archive function
+    function downloadArchive(id) {
+        Swal.fire({
+            icon: 'info',
+            title: 'Download Archive',
+            text: 'Archive download functionality will be implemented later',
+            timer: 2000,
+            showConfirmButton: false
+        });
+    }
+
+    // Quick filter handlers
+    $('.quick-filter').click(function() {
+        var filterType = $(this).data('category') ? 'category' : 'date';
+        var filterValue = $(this).data('category') || $(this).data('date');
+        
+        if (filterType === 'category') {
+            $('#category').val(filterValue);
+        } else if (filterType === 'date') {
+            var today = new Date();
+            var dateStr = today.toISOString().split('T')[0]; // Already in YYYY-MM-DD format
+            
+            if (filterValue === 'today') {
+                $('#startdate').val(dateStr);
+                $('#enddate').val(dateStr);
+            } else if (filterValue === 'week') {
+                var weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+                var weekAgoStr = weekAgo.toISOString().split('T')[0]; // Already in YYYY-MM-DD format
+                
+                $('#startdate').val(weekAgoStr);
+                $('#enddate').val(dateStr);
+            }
+        }
+        
+        // Trigger search
+        showSampleResults();
+        
+        // Highlight active filter
+        $('.quick-filter').removeClass('active');
+        $(this).addClass('active');
+    });
+
+    // Reset filters
+    $('#resetFilters').click(function() {
+        $('#archiveSearchForm')[0].reset();
+        $('#startdate').val('{{ date("Y-m-d") }}');
+        $('#enddate').val('{{ date("Y-m-d") }}');
+        $('.quick-filter').removeClass('active');
+        showSampleResults();
+    });
+
+    // View mode change handler
+    $('input[name="viewMode"]').change(function() {
+        showSampleResults();
+    });
+
+    // Items per page change handler
+    $('#itemsPerPage').change(function() {
+        showSampleResults();
+    });
+
+    // Refresh results
+    $('#refreshResults').click(function() {
+        showSampleResults();
+    });
+</script>
+
+<style>
+/* Archive Grid View */
+.archive-item {
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    background: #fff;
+    transition: all 0.3s ease;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.archive-item:hover {
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    transform: translateY(-2px);
+    border-color: #007bff;
+}
+
+.archive-thumbnail-container {
+    position: relative;
+    overflow: hidden;
+    border-radius: 8px 8px 0 0;
+}
+
+.archive-thumbnail {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.archive-item:hover .archive-thumbnail {
+    transform: scale(1.05);
+}
+
+.archive-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.archive-item:hover .archive-overlay {
+    opacity: 1;
+}
+
+.archive-content {
+    padding: 12px;
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.archive-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 8px;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.archive-meta {
+    margin-top: auto;
+    font-size: 11px;
+}
+
+/* Archive Info Section */
+.archive-info {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-top: 1px solid #e9ecef;
+}
+
+.archive-page {
+    font-weight: 600;
+    color: #495057;
+    font-size: 13px;
+    margin-bottom: 2px;
+}
+
+.archive-category {
+    color: #6c757d;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+/* Archive Title Bar */
+.archive-title-bar {
+    background: #f8f9fa;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 1px solid #e9ecef;
+    text-align: center;
+}
+
+/* Archive Category Label */
+.archive-category-label {
+    background: #f8f9fa;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #6c757d;
+    text-align: center;
+    border-top: 1px solid #e9ecef;
+}
+
+/* Archive Actions */
+.archive-actions {
+    padding: 8px 12px;
+    background: #fff;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+
+.archive-actions .btn-icon {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #6c757d;
+    border-radius: 4px;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.archive-actions .btn-icon:hover {
+    background: #f8f9fa;
+    border-color: #adb5bd;
+    color: #495057;
+}
+
+/* Archive List View */
+.list-view {
+    background: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.archive-list-item {
+    border-bottom: 1px solid #e9ecef;
+    padding: 15px;
+    transition: background-color 0.3s ease;
+}
+
+.archive-list-item:hover {
+    background-color: #f8f9fa;
+}
+
+.archive-list-item:last-child {
+    border-bottom: none;
+}
+
+.archive-list-thumbnail {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 6px;
+}
+
+.archive-list-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.archive-list-meta {
+    font-size: 13px;
+}
+
+.archive-list-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* Quick Filters */
+.quick-filter {
+    transition: all 0.3s ease;
+}
+
+.quick-filter:hover {
+    transform: translateY(-1px);
+}
+
+.quick-filter.active {
+    background-color: #007bff !important;
+    border-color: #007bff !important;
+    color: #fff !important;
+}
+
+/* Pagination */
+.pagination-controls .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.pagination-info {
+    font-weight: 500;
+    color: #6c757d;
+}
+
+/* View Controls */
+.view-controls .btn-group {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Results Info */
+.results-info h6 {
+    color: #495057;
+    font-weight: 600;
+}
+
+/* Form Improvements */
+.form-select, .form-control {
+    border-radius: 6px;
+    border: 1px solid #ced4da;
+    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+.form-select:focus, .form-control:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+/* Card Improvements */
+.card {
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    border-radius: 12px;
+}
+
+.card-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 12px 12px 0 0 !important;
+    border: none;
+}
+
+.card-header .card-title {
+    color: white;
+    font-weight: 600;
+}
+
+.card-tools .btn {
+    color: white;
+    border-color: rgba(255,255,255,0.3);
+}
+
+.card-tools .btn:hover {
+    background-color: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.5);
+}
+
+/* Responsive Improvements */
+@media (max-width: 768px) {
+    .archive-item {
+        margin-bottom: 20px;
+    }
+    
+    .archive-list-item {
+        padding: 10px;
+    }
+    
+    .archive-list-actions {
+        margin-top: 10px;
+    }
+    
+    .pagination-controls {
+        flex-direction: column;
+        gap: 10px;
+        align-items: center;
+    }
+}
+
+/* Loading Animation */
+.loading-spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Badge Improvements */
+.badge {
+    font-size: 10px;
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+/* Button Improvements */
+.btn {
+    border-radius: 6px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+}
+
+.btn-outline-primary:hover {
+    box-shadow: 0 4px 8px rgba(0,123,255,0.3);
+}
+
+.btn-outline-success:hover {
+    box-shadow: 0 4px 8px rgba(40,167,69,0.3);
+}
+
+.btn-outline-danger:hover {
+    box-shadow: 0 4px 8px rgba(220,53,69,0.3);
+}
+</style>
+@endpush
