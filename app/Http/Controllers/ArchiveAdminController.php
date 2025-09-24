@@ -744,7 +744,147 @@ class ArchiveAdminController extends Controller
                 $query->where('edition_pageno', $pno);
             }
 
-            // Get total count for pagination (same as SearchTotalNew)
+            // Handle tab data requests
+            if ($request->has('edition_code')) {
+                $editionCode = $request->input('edition_code');
+                $tabPage = $request->input('pages', 0);
+                
+                $editionQuery = clone $query;
+                if ($editionCode != '0') {
+                    $editionQuery->where('edition_code', $editionCode);
+                } else {
+                    $editionQuery->where('edition_code', 0);
+                }
+                
+                $editionTotal = $editionQuery->count();
+                $editionArchives = $editionQuery->orderBy('edition_name')
+                    ->orderBy('edition_pageno')
+                    ->offset($tabPage)
+                    ->limit(18)
+                    ->get();
+                    $str_tab_div_html = '';
+                
+                // $str_tab_div_html = '<div class="box-footer text-center cls-div-pagination" style="background-color: #e9c8fe;padding:5px;"><button class="btn btn-primary PreviousPaginationEditions" type="button" onclick="fnGetEditionPreviousPagination('.$editionCode.','.$editionTotal.');"><i class="fa fa-toggle-left"></i> Previous</button> <span id="TotalVisibleEditionArchive'.$editionCode.'">Showing '.$tabPage.' to '.min($tabPage + 18, $editionTotal).' of total </span><span id="TotalArchive'.$editionCode.'">'.$editionTotal.'</span>
+                // <button class="btn btn-primary NextPaginationEditions" type="button" onclick="fnGetEditionNextPagination('.$editionCode.','.$editionTotal.');"><i class="fa fa-toggle-right"></i> Next</button></div>';
+                // $str_tab_div_html .= '<div class="row text-center" id="ArchiveSearchRes'.$editionCode.'"><div class="row">';
+                
+                foreach ($editionArchives as $archive) {
+                    $thumbnailPath = $this->generateThumbnailPath($archive);
+                    $isNew = $this->isNewArchive($archive->filename);
+                    $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
+                }
+                
+                $str_tab_div_html .= '</div></div>';
+                
+                return response()->json([
+                    'success' => true,
+                    'str_tab_div_html' => $str_tab_div_html
+                ]);
+            }
+            
+            // Check if we need to show tabs (center selected, no category)
+            if (!empty($center) && (empty($category) || $category === '')) {
+                // Tab functionality - get editions for this center from pdf table
+                $editions = DB::table('pdf')
+                    ->select('edition_code', 'edition_name')
+                    ->where('published_center', $center)
+                    ->where('edition_code', '!=', 0)
+                    ->whereNotNull('edition_name')
+                    ->where('edition_name', '!=', '')
+                    ->distinct()
+                    ->orderBy('edition_name')
+                    ->get();
+                
+                $str_tab_html = '';
+                $str_tab_div_html = '';
+                
+                if ($editions->count() > 0) {
+                    Log::info('Found editions for center: ' . $center, ['count' => $editions->count()]);
+                    foreach ($editions as $index => $edition) {
+                        if ($index == 0) {
+                            $str_tab_html .= '<button type="button" class="btn btn-sm btn-outline-primary edition-tab active" data-edition="'.$edition->edition_code.'" onclick="fnGetTabData('.$edition->edition_code.');">'.$edition->edition_name.'</button>';
+                        } else {
+                            $str_tab_html .= '<button type="button" class="btn btn-sm btn-outline-primary edition-tab" data-edition="'.$edition->edition_code.'" onclick="fnGetTabData('.$edition->edition_code.');">'.$edition->edition_name.'</button>';
+                        }
+                        
+                        if ($index == 0) {
+                            // Get data for first tab
+                            $editionQuery = clone $query;
+                            $editionQuery->where('edition_code', $edition->edition_code);
+                            
+                            $editionTotal = $editionQuery->count();
+                            $editionArchives = $editionQuery->orderBy('edition_name')
+                                ->orderBy('edition_pageno')
+                                ->offset($page * $perPage)
+                                ->limit($perPage)
+                                ->get();
+                            $str_tab_div_html = '';
+                            
+                            // $str_tab_div_html .= '<div id="div_'.$edition->edition_code.'" class="cls_edition_tabs tab-pane fade">';
+                            // $str_tab_div_html .= '<div class="box-footer text-center cls-div-pagination" style="background-color: #e9c8fe;padding:5px;"><button class="btn btn-primary PreviousPaginationEditions" type="button" onclick="fnGetEditionPreviousPagination('.$edition->edition_code.','.$editionTotal.');"><i class="fa fa-toggle-left"></i> Previous</button> <span id="TotalVisibleEditionArchive'.$edition->edition_code.'">Showing '.$page.' to '.min($page + $perPage, $editionTotal).' of total </span><span id="TotalArchive'.$edition->edition_code.'">'.$editionTotal.'</span>
+                            // <button class="btn btn-primary NextPaginationEditions" type="button" onclick="fnGetEditionNextPagination('.$edition->edition_code.','.$editionTotal.');"><i class="fa fa-toggle-right"></i> Next</button></div>';
+                            // $str_tab_div_html .= '<div class="row text-center" id="ArchiveSearchRes'.$edition->edition_code.'"><div class="row">';
+                            
+                            foreach ($editionArchives as $archive) {
+                                $thumbnailPath = $this->generateThumbnailPath($archive);
+                                $isNew = $this->isNewArchive($archive->filename);
+                                
+                                $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
+                            }
+                            
+                            $str_tab_div_html .= '</div></div>';
+                            $str_tab_div_html .= '</div>';
+                        } else {
+                            $str_tab_div_html .= '<div id="div_'.$edition->edition_code.'"><div class="row text-center" id="ArchiveSearchRes'.$edition->edition_code.'"><div class="row">';
+                            $str_tab_div_html .= '</div></div></div>';
+                        }
+                    }
+                }
+                
+                // Add "Other" tab with content
+                $str_tab_html .= '<button type="button" class="btn btn-sm btn-outline-secondary edition-tab" data-edition="0" onclick="fnGetTabData(0);">Other</button>';
+                
+                // Get "Other" archives (edition_code = 0 or NULL)
+                $otherQuery = clone $query;
+                $otherQuery->where(function($q) {
+                    $q->where('edition_code', 0)
+                      ->orWhereNull('edition_code');
+                });
+                
+                $otherArchives = $otherQuery->orderBy('edition_name')
+                    ->orderBy('edition_pageno')
+                    ->orderBy('filename')
+                    ->get();
+                
+                $str_tab_div_html .= '<div id="div_0"><div class="row text-center" id="ArchiveSearchRes0"><div class="row">';
+                
+                if ($otherArchives->count() > 0) {
+                    foreach ($otherArchives as $archive) {
+                        $thumbnailPath = $this->generateThumbnailPath($archive);
+                        $isNew = $this->isNewArchive($archive->filename);
+                        $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
+                    }
+                } else {
+                    $str_tab_div_html .= '<div class="col-12 text-center py-5">';
+                    $str_tab_div_html .= '<i class="bx bx-inbox bx-lg text-muted mb-3"></i>';
+                    $str_tab_div_html .= '<h5 class="text-muted">No archives found in Other category</h5>';
+                    $str_tab_div_html .= '</div>';
+                }
+                
+                $str_tab_div_html .= '</div></div></div>';
+                
+                return response()->json([
+                    'success' => true,
+                    'status' => 'success',
+                    'center_id' => $center,
+                    'category' => $category,
+                    'html' => '',
+                    'str_tab_html' => $str_tab_html,
+                    'str_tab_div_html' => $str_tab_div_html
+                ]);
+            }
+            
+            // Regular search (no tabs)
             $totalCount = $query->count();
             
             // Get paginated results with new pagination system
@@ -754,31 +894,24 @@ class ArchiveAdminController extends Controller
                             ->limit($perPage)
                             ->get();
 
-            
-            // Prepare data for new pagination system
-            $data = [];
+            // Generate HTML for regular search results
+            $html = '<div class="row">';
             foreach ($archives as $archive) {
-                // Generate thumbnail path
                 $thumbnailPath = $this->generateThumbnailPath($archive);
-                
-                $data[] = [
-                    'id' => $archive->id,
-                    'title' => $archive->title ?: 'Page',
-                    'category' => $archive->category,
-                    'edition_pageno' => $archive->edition_pageno,
-                    'published_center' => $archive->published_center,
-                    'published_date' => $archive->published_date,
-                    'upload_date' => $archive->upload_date,
-                    'filepath' => $archive->filepath,
-                    'thumbnail_path' => $thumbnailPath,
-                    'auto' => $archive->auto,
-                    'filename' => $archive->filename,
-                ];
+                $isNew = $this->isNewArchive($archive->filename);
+                $html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
             }
+            $html .= '</div>';
             
             return response()->json([
                 'success' => true,
-                'data' => $data,
+                'status' => 'success',
+                'center_id' => $center,
+                'category' => $category,
+                'data' => $archives->toArray(),
+                'html' => $html,
+                'str_tab_html' => '',
+                'str_tab_div_html' => '',
                 'total_count' => $totalCount,
                 'current_page' => $page,
                 'per_page' => $perPage,
@@ -1082,6 +1215,125 @@ class ArchiveAdminController extends Controller
                 'status' => 'fail',
                 'message' => 'Error deleting special date'
             ]);
+        }
+    }
+    
+    private function isNewArchive($filename)
+    {
+        $filename = strtolower($filename);
+        return (strpos($filename, 'alter') !== false || 
+                strpos($filename, 'new') !== false);
+    }
+    
+    private function generateArchiveCardHtml($archive, $thumbnailPath, $isNew = false)
+    {
+        $title = !empty($archive->title) ? $archive->title : 'Page';
+        $borderStyle = $isNew ? 'border:3px solid green;' : '';
+        
+        $html = '<div class="col-lg-2 col-md-3 col-sm-4 col-6 mb-4">';
+        $html .= '<div class="archive-item">';
+        $html .= '<div class="archive-thumbnail-container">';
+        $html .= '<img src="'.$thumbnailPath.'" class="archive-thumbnail" alt="'.$title.'" onerror="this.src=\'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K\'">';
+        $html .= '</div>';
+        $html .= '<div class="archive-info">';
+        $html .= '<div class="archive-page">Page ' . ($archive->edition_pageno ?? 'N/A') . '</div>';
+        $html .= '<div class="archive-category">' . ($archive->category ?? 'N/A') . '</div>';
+        $html .= '</div>';
+        $html .= '<div class="archive-actions">';
+        $html .= '<button class="btn btn-icon" onclick="viewArchive('.$archive->id.')" title="View Document"><i class="bx bx-file"></i></button>';
+        $html .= '<button class="btn btn-icon" onclick="confirmation('.$archive->id.')" title="Delete"><i class="bx bx-trash"></i></button>';
+        $html .= '<button class="btn btn-icon" onclick="copyArchive('.$archive->id.')" title="Copy"><i class="bx bx-copy"></i></button>';
+        $html .= '<button class="btn btn-icon" onclick="printArchive('.$archive->id.')" title="Print"><i class="bx bx-printer"></i></button>';
+        $html .= '</div>';
+        $html .= '</div>';
+        $html .= '</div>';
+        
+        return $html;
+    }
+    
+    /**
+     * Show the form for editing an archive
+     */
+    public function edit($id)
+    {
+        try {
+            $archive = DB::table('pdf')->where('id', $id)->first();
+            
+            if (!$archive) {
+                return redirect()->route('admin.archive.display')
+                    ->with('error', 'Archive not found.');
+            }
+            
+            // Get categories for dropdown
+            $categories = DB::table('category_pdf')
+                ->where('active_status', '1')
+                ->orderBy('category')
+                ->get();
+            
+            // Get centers for dropdown
+            $centers = DB::table('matrix_report_centers')
+                ->orderBy('description')
+                ->get();
+            
+            return view('archive.admin.edit', compact('archive', 'categories', 'centers'));
+            
+        } catch (\Exception $e) {
+            Log::error('Error loading archive edit form: ' . $e->getMessage());
+            return redirect()->route('admin.archive.display')
+                ->with('error', 'Error loading archive data.');
+        }
+    }
+    
+    /**
+     * Update the specified archive
+     */
+    public function update(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'title' => 'nullable|string|max:255',
+                'category' => 'required|string|max:100',
+                'edition_name' => 'nullable|string|max:100',
+                'edition_code' => 'nullable|integer',
+                'edition_pageno' => 'nullable|integer',
+                'published_center' => 'nullable|string|max:50',
+                'published_date' => 'nullable|date',
+            ]);
+            
+            $updateData = [
+                'title' => $request->title,
+                'category' => $request->category,
+                'edition_name' => $request->edition_name,
+                'edition_code' => $request->edition_code,
+                'edition_pageno' => $request->edition_pageno,
+                'published_center' => $request->published_center,
+                'published_date' => $request->published_date,
+                'updated_at' => now(),
+            ];
+            
+            // Remove null values
+            $updateData = array_filter($updateData, function($value) {
+                return $value !== null;
+            });
+            
+            $result = DB::table('pdf')
+                ->where('id', $id)
+                ->update($updateData);
+            
+            if ($result) {
+                return redirect()->route('admin.archive.display')
+                    ->with('success', 'Archive updated successfully.');
+            } else {
+                return redirect()->back()
+                    ->with('error', 'Failed to update archive.')
+                    ->withInput();
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Error updating archive: ' . $e->getMessage());
+            return redirect()->back()
+                ->with('error', 'Error updating archive: ' . $e->getMessage())
+                ->withInput();
         }
     }
 }

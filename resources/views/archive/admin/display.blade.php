@@ -76,19 +76,6 @@
                         </div>
                     </div>
 
-                    <!-- Quick Filters -->
-                    <div class="row mt-3">
-                        <div class="col-12">
-                            <div class="d-flex flex-wrap gap-2">
-                                <span class="text-muted small">Quick Filters:</span>
-                                <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-category="Matrix Auto">Matrix Auto</button>
-                                <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-category="News">News</button>
-                                <button type="button" class="btn btn-sm btn-outline-primary quick-filter" data-category="Sports">Sports</button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary quick-filter" data-date="today">Today</button>
-                                <button type="button" class="btn btn-sm btn-outline-secondary quick-filter" data-date="week">This Week</button>
-                            </div>
-                        </div>
-                    </div>
                 </form>
             </div>
         </div>
@@ -108,7 +95,7 @@
                             <span id="TotalArchive">0</span> Archives
                         </h6>
                     </div>
-                    <div class="view-controls">
+                    <!-- <div class="view-controls">
                         <div class="btn-group" role="group">
                             <input type="radio" class="btn-check" name="viewMode" id="gridView" value="grid" checked>
                             <label class="btn btn-outline-primary btn-sm" for="gridView">
@@ -124,7 +111,7 @@
                                 <i class="bx bx-refresh"></i>
                             </button>
                         </div>
-                    </div>
+                    </div> -->
                 </div>
             </div>
         </div>
@@ -134,6 +121,21 @@
 <!-- Archive Search Results -->
 <div class="row" id="ArchiveSearchRes">
     <!-- Search results will be displayed here -->
+</div>
+
+<!-- Tab Structure for Editions -->
+<div class="row" id="ResultFilter" style="display: none;">
+    <div class="col-12">
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <span class="text-muted small">Editions:</span>
+            <div id="edition_tabs">
+                <!-- Tab headers will be populated here -->
+            </div>
+        </div>
+        <div id="edition_tabs_content" class="tab-content">
+            <!-- Tab content will be populated here -->
+        </div>
+    </div>
 </div>
 
 <!-- Archive Results Grid -->
@@ -228,7 +230,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-loading-modal/2.1.7/jquery.loadingModal.min.js"></script>
 
 <script>
-// Global variables for pagination
+// Global variables for search
 var currentPage = 0;
 var totalRecords = 0;
 var recordsPerPage = 18;
@@ -276,44 +278,12 @@ $(document).ready(function(){
         }
     });
 
-    // Quick filter handlers
-    $('.quick-filter').click(function() {
-        var filterType = $(this).data('category') ? 'category' : 'date';
-        var filterValue = $(this).data('category') || $(this).data('date');
-        
-        if (filterType === 'category') {
-            $('#category').val(filterValue);
-        } else if (filterType === 'date') {
-            var today = new Date();
-            var dateStr = today.toISOString().split('T')[0];
-            
-            if (filterValue === 'today') {
-                $('#startdate').val(dateStr);
-                $('#enddate').val(dateStr);
-            } else if (filterValue === 'week') {
-                var weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-                var weekAgoStr = weekAgo.toISOString().split('T')[0];
-                
-                $('#startdate').val(weekAgoStr);
-                $('#enddate').val(dateStr);
-            }
-        }
-        
-        // Trigger search
-        currentPage = 0;
-        loadArchives(0);
-        
-        // Highlight active filter
-        $('.quick-filter').removeClass('active');
-        $(this).addClass('active');
-    });
 
     // Reset filters
     $('#resetFilters').click(function() {
         $('#archiveSearchForm')[0].reset();
-        $('#startdate').val('{{ date("Y-m-d") }}');
-        $('#enddate').val('{{ date("Y-m-d") }}');
-        $('.quick-filter').removeClass('active');
+        $('#startdate').val(''); // Clear start date
+        $('#enddate').val(''); // Clear end date
         currentPage = 0;
         loadArchives(0);
     });
@@ -340,8 +310,14 @@ function loadArchives(page) {
         data: formData,
         success: function(response) {
             if(response.success) {
-                displayArchives(response.data);
-                updatePagination(response);
+                // Check if we have tab data (center selected, no category)
+                if(response.str_tab_html && response.str_tab_div_html) {
+                    displayTabs(response);
+                } else {
+                    // Regular search results - use HTML content
+                    displayRegularResults(response);
+                    updatePagination(response);
+                }
             } else {
                 showNoResults();
             }
@@ -356,8 +332,42 @@ function loadArchives(page) {
     });
 }
 
-// Display archives in grid
+// Display tabs for editions
+function displayTabs(response) {
+    // Hide regular search results
+    $('#ArchiveSearchRes').hide();
+    $('.cls-div-pagination').hide();
+    $('#ResultFilter').show();
+    
+    // Populate tab headers
+    $('#edition_tabs').html(response.str_tab_html);
+    $('#edition_tabs_content').html(response.str_tab_div_html);
+    
+    // Activate first tab
+    $('.edition-tab:first').addClass('active');
+}
+
+// Display regular search results (HTML content)
+function displayRegularResults(response) {
+    // Hide tabs and show regular results
+    $('#ResultFilter').hide();
+    $('#ArchiveSearchRes').show();
+    $('.cls-div-pagination').show();
+    
+    if(response.html) {
+        $('#ArchiveSearchRes').html(response.html);
+    } else {
+        showNoResults();
+    }
+}
+
+// Display archives in grid (for data array)
 function displayArchives(archives) {
+    // Hide tabs and show regular results
+    $('#ResultFilter').hide();
+    $('#ArchiveSearchRes').show();
+    $('.cls-div-pagination').show();
+    
     var html = '<div class="row">';
     
     if(archives.length === 0) {
@@ -393,12 +403,27 @@ function createArchiveCard(archive) {
     card += '<button class="btn btn-icon" onclick="viewArchive(' + archive.id + ')" title="View Document"><i class="bx bx-file"></i></button>';
     card += '<button class="btn btn-icon" onclick="confirmation(' + archive.id + ')" title="Delete"><i class="bx bx-trash"></i></button>';
     card += '<button class="btn btn-icon" onclick="editArchive(' + archive.id + ')" title="Edit"><i class="bx bx-edit"></i></button>';
-    card += '<button class="btn btn-icon" onclick="downloadArchive(' + archive.id + ')" title="Download"><i class="bx bx-download"></i></button>';
+    card += '<button class="btn btn-icon" onclick="copyArchive(' + archive.id + ')" title="Copy"><i class="bx bx-copy"></i></button>';
+    card += '<button class="btn btn-icon" onclick="printArchive(' + archive.id + ')" title="Print"><i class="bx bx-printer"></i></button>';
     card += '</div>';
     card += '</div>';
     card += '</div>';
     
     return card;
+}
+
+// Copy archive function (placeholder)
+function copyArchive(id) {
+    console.log('Copy archive:', id);
+    // TODO: Implement copy functionality
+    alert('Copy functionality will be implemented later');
+}
+
+// Print archive function (placeholder)
+function printArchive(id) {
+    console.log('Print archive:', id);
+    // TODO: Implement print functionality
+    alert('Print functionality will be implemented later');
 }
 
 // Update pagination controls
@@ -469,10 +494,48 @@ function downloadArchive(id) {
 }
 
 function confirmation(id) {
-    if(confirm("Are you sure you want to delete this archive?")) {
-        console.log('Delete archive:', id);
-        alert('Delete functionality for archive ID: ' + id + ' - To be implemented');
-    }
+    Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        cancelButtonText: 'Cancel',
+        background: '#fff',
+        customClass: {
+            popup: 'swal2-popup-custom',
+            title: 'swal2-title-custom',
+            content: 'swal2-content-custom'
+        }
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // Show loading
+            Swal.fire({
+                title: 'Deleting...',
+                text: 'Please wait while we delete the archive.',
+                icon: 'info',
+                allowOutsideClick: false,
+                showConfirmButton: false,
+                didOpen: () => {
+                    Swal.showLoading();
+                }
+            });
+            
+            // Simulate delete process (replace with actual delete logic)
+            setTimeout(() => {
+                Swal.fire({
+                    title: 'Deleted!',
+                    text: 'Archive has been deleted successfully.',
+                    icon: 'success',
+                    confirmButtonText: 'OK'
+                });
+                console.log('Delete archive:', id);
+                // TODO: Implement actual delete functionality
+            }, 2000);
+        }
+    });
 }
 
 function download_log(alias, download_url, date, ccode, edition_code, pageno) {
@@ -496,42 +559,168 @@ function download_log(alias, download_url, date, ccode, edition_code, pageno) {
         }
     });
 }
+
+// Tab functionality functions
+var editionStartPage = 0;
+var editionCurrentPage = 0;
+var isEditionChange = 0;
+
+function fnGetTabData(edition_code) {
+    console.log('Loading tab data for edition:', edition_code);
+    
+    // Update active tab button
+    $('.edition-tab').removeClass('active');
+    $('.edition-tab[data-edition="' + edition_code + '"]').addClass('active');
+    
+    var formData = $('#archiveSearchForm').serializeArray();
+    formData.push({name: 'edition_code', value: edition_code});
+    formData.push({name: 'pages', value: 0});
+    
+    editionStartPage = 0;
+    $.ajax({
+        type: 'POST',
+        data: formData,
+        url: '{{ route("admin.archive.search") }}',
+        beforeSend: function(){
+            $("#div_"+edition_code).empty();
+            $("#div_"+edition_code).hide();
+        },
+        success: function(response){
+            if(response.success && response.str_tab_div_html) {
+                $("#div_"+edition_code).html(response.str_tab_div_html);
+                $("#div_"+edition_code).show();
+                isEditionChange = 1;
+                editionCurrentPage = 18;
+            }
+        }
+    });
+}
+
+function fnGetEditionNextPagination(edition_code, total_rec) {
+    if(total_rec <= editionCurrentPage){
+        alert("No Next Available");
+    } else {
+        if(isEditionChange == 1){
+            editionStartPage = 18;
+            isEditionChange = 0;
+        } else {
+            editionStartPage = parseInt(editionStartPage, 10) + 18;
+        }
+
+        var formData = $('#searchForm').serializeArray();
+        formData.push({name: 'edition_code', value: edition_code});
+        formData.push({name: 'pages', value: editionStartPage});
+        
+        $.ajax({
+            type: 'POST',
+            data: formData,
+            url: '{{ route("admin.archive.search") }}',
+            beforeSend: function(){
+                $('ul#edition_tabs li a').each(function(i) {
+                    var val = $(this).attr('data-value');
+                    if(val == edition_code){
+                        $(this).removeAttr("onclick");
+                    } else {
+                        var str_fn = "fnGetTabData("+val+");"
+                        $(this).attr("onclick", str_fn);
+                    }
+                });
+                $("#div_"+edition_code).empty();
+                $("#div_"+edition_code).hide();
+            },
+            success: function(response){
+                if(response.success && response.str_tab_div_html) {
+                    $("#div_"+edition_code).html(response.str_tab_div_html);
+                    $("#div_"+edition_code).show();
+                    $("#div_"+edition_code).removeAttr('style');
+                    editionCurrentPage = editionCurrentPage + 18;
+                }
+            }
+        });
+    }
+}
+
+function fnGetEditionPreviousPagination(edition_code, total_rec) {
+    if(editionStartPage == 0){
+        alert("No Previous Available");
+    } else {
+        editionStartPage = parseInt(editionStartPage, 10) - 18;
+        var formData = $('#searchForm').serializeArray();
+        formData.push({name: 'edition_code', value: edition_code});
+        formData.push({name: 'pages', value: editionStartPage});
+        
+        $.ajax({
+            type: 'POST',
+            data: formData,
+            url: '{{ route("admin.archive.search") }}',
+            beforeSend: function(){
+                $('ul#edition_tabs li a').each(function(i) {
+                    var val = $(this).attr('data-value');
+                    if(val == edition_code){
+                        $(this).removeAttr("onclick");
+                    } else {
+                        var str_fn = "fnGetTabData("+val+");"
+                        $(this).attr("onclick", str_fn);
+                    }
+                });
+                $("#div_"+edition_code).empty();
+                $("#div_"+edition_code).hide();
+            },
+            success: function(response){
+                if(response.success && response.str_tab_div_html) {
+                    $("#div_"+edition_code).html(response.str_tab_div_html);
+                    $("#div_"+edition_code).show();
+                    $("#div_"+edition_code).removeAttr('style');
+                    editionCurrentPage = editionCurrentPage - 18;
+                }
+            }
+        });
+    }
+}
 </script>
 
 <style>
     /* Archive Grid View */
     .archive-item {
         border: 1px solid #e9ecef;
-        border-radius: 12px;
+        border-radius: 16px;
         background: #fff;
-        transition: all 0.3s ease;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        position: relative;
+        backdrop-filter: blur(10px);
+        margin-bottom: 20px;
     }
 
     .archive-item:hover {
-        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-        transform: translateY(-2px);
+        box-shadow: 0 12px 32px rgba(0, 123, 255, 0.2);
+        transform: translateY(-4px) scale(1.02);
         border-color: #007bff;
+        background: linear-gradient(135deg, #fff 0%, #f8f9ff 100%);
     }
 
     .archive-thumbnail-container {
         position: relative;
         overflow: hidden;
-        border-radius: 8px 8px 0 0;
+        border-radius: 12px 12px 0 0;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
     }
 
     .archive-thumbnail {
         width: 100%;
-        height: 180px;
+        height: 200px;
         object-fit: cover;
-        transition: transform 0.3s ease;
+        transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        border-radius: 8px;
     }
 
     .archive-item:hover .archive-thumbnail {
-        transform: scale(1.05);
+        transform: scale(1.08);
+        filter: brightness(1.1) contrast(1.05);
     }
 
     .archive-overlay {
@@ -553,22 +742,24 @@ function download_log(alias, download_url, date, ccode, edition_code, pageno) {
     }
 
     .archive-content {
-        padding: 12px;
+        padding: 16px;
         flex-grow: 1;
         display: flex;
         flex-direction: column;
+        background: linear-gradient(135deg, #fff 0%, #fafbfc 100%);
     }
 
     .archive-title {
-        font-size: 13px;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 8px;
-        line-height: 1.3;
+        font-size: 14px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 10px;
+        line-height: 1.4;
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
         overflow: hidden;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
 
     .archive-meta {
@@ -620,33 +811,37 @@ function download_log(alias, download_url, date, ccode, edition_code, pageno) {
 
     /* Archive Actions */
     .archive-actions {
-        padding: 8px 12px;
-        background: #fff;
-        border-top: 1px solid #e9ecef;
+        padding: 12px 16px;
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-top: 1px solid #dee2e6;
         display: flex;
-        gap: 4px;
+        gap: 8px;
         justify-content: center;
+        border-radius: 0 0 12px 12px;
     }
 
     .archive-actions .btn-icon {
-        width: 28px;
-        height: 28px;
+        width: 32px;
+        height: 32px;
         padding: 0;
         display: flex;
         align-items: center;
         justify-content: center;
         border: 1px solid #dee2e6;
-        background: #fff;
+        background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
         color: #6c757d;
-        border-radius: 4px;
-        font-size: 12px;
-        transition: all 0.2s ease;
+        border-radius: 8px;
+        font-size: 13px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     }
 
     .archive-actions .btn-icon:hover {
-        background: #f8f9fa;
-        border-color: #adb5bd;
-        color: #495057;
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border-color: #007bff;
+        color: #fff;
+        transform: translateY(-2px) scale(1.1);
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
     }
 
     /* Archive List View */
@@ -694,20 +889,6 @@ function download_log(alias, download_url, date, ccode, edition_code, pageno) {
         flex-wrap: wrap;
     }
 
-    /* Quick Filters */
-    .quick-filter {
-        transition: all 0.3s ease;
-    }
-
-    .quick-filter:hover {
-        transform: translateY(-1px);
-    }
-
-    .quick-filter.active {
-        background-color: #007bff !important;
-        border-color: #007bff !important;
-        color: #fff !important;
-    }
 
     /* Pagination */
     .pagination-controls .btn:disabled {
@@ -772,6 +953,103 @@ function download_log(alias, download_url, date, ccode, edition_code, pageno) {
     .card-tools .btn:hover {
         background-color: rgba(255, 255, 255, 0.1);
         border-color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Enhanced Design Elements */
+    .card {
+        border: none;
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        border-radius: 16px;
+        background: linear-gradient(135deg, #fff 0%, #f8f9ff 100%);
+        backdrop-filter: blur(10px);
+    }
+
+    /* Grid Spacing */
+    .row {
+        margin-left: -10px;
+        margin-right: -10px;
+    }
+
+    .col-lg-2, .col-md-3, .col-sm-4, .col-6 {
+        padding-left: 10px;
+        padding-right: 10px;
+        margin-bottom: 20px;
+    }
+
+    /* PDF Box Spacing */
+    .pdf_box {
+        margin-bottom: 20px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border: none;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 123, 255, 0.4);
+    }
+
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .form-control:focus, .form-select:focus {
+        border-color: #007bff;
+        box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        transform: translateY(-1px);
+    }
+
+    /* SweetAlert Custom Styling */
+    .swal2-popup-custom {
+        border-radius: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    .swal2-title-custom {
+        color: #2c3e50;
+        font-weight: 700;
+        font-size: 24px;
+    }
+
+    .swal2-content-custom {
+        color: #6c757d;
+        font-size: 16px;
+    }
+
+    .swal2-confirm {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%) !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        padding: 10px 20px !important;
+        box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3) !important;
+    }
+
+    .swal2-cancel {
+        background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%) !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        padding: 10px 20px !important;
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3) !important;
+    }
+
+    .swal2-confirm:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(220, 53, 69, 0.4) !important;
+    }
+
+    .swal2-cancel:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(108, 117, 125, 0.4) !important;
     }
 
     /* Responsive Improvements */
@@ -840,6 +1118,79 @@ function download_log(alias, download_url, date, ccode, edition_code, pageno) {
 
     .btn-outline-danger:hover {
         box-shadow: 0 4px 8px rgba(220, 53, 69, 0.3);
+    }
+
+    /* Tab Styling - Match Quick Filters */
+    #ResultFilter .edition-tab {
+        margin-right: 5px;
+        margin-bottom: 5px;
+        transition: all 0.3s ease;
+    }
+
+    #ResultFilter .edition-tab.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff;
+    }
+
+    #ResultFilter .edition-tab:hover {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        color: #fff;
+    }
+
+    #ResultFilter .tab-content {
+        padding: 0;
+        background-color: #fff;
+        min-height: 300px;
+    }
+
+    #ResultFilter .tab-pane {
+        display: none;
+    }
+
+    #ResultFilter .tab-pane.active {
+        display: block;
+    }
+
+    #ResultFilter .tab-pane.fade {
+        opacity: 0;
+        transition: opacity 0.15s linear;
+    }
+
+    #ResultFilter .tab-pane.fade.active {
+        opacity: 1;
+    }
+
+    .cls-div-pagination {
+        background-color: #f8f9fa;
+        padding: 15px;
+        margin: 15px 0;
+        border-radius: 6px;
+        border: 1px solid #dee2e6;
+    }
+
+    .cls-div-pagination .btn {
+        margin: 0 5px;
+        border-radius: 4px;
+        font-weight: 500;
+    }
+
+
+    /* Responsive styling */
+    @media (max-width: 768px) {
+        #ResultFilter .edition-tab {
+            margin-bottom: 10px;
+        }
+        
+        .cls-div-pagination {
+            text-align: center;
+        }
+        
+        .cls-div-pagination .btn {
+            margin: 5px;
+            display: inline-block;
+        }
     }
 </style>
 @endpush

@@ -75,6 +75,8 @@ Route::prefix('admin/archive')->name('admin.archive.')->middleware(['auth', 'rot
     Route::post('/search-total', [ArchiveAdminController::class, 'searchTotal'])->name('search-total');
     Route::post('/download-log', [ArchiveAdminController::class, 'downloadLog'])->name('download-log');
     Route::post('/delete', [ArchiveAdminController::class, 'deleteArchive'])->name('delete');
+    Route::get('/edit/{id}', [ArchiveAdminController::class, 'edit'])->name('edit');
+    Route::put('/edit/{id}', [ArchiveAdminController::class, 'update'])->name('update');
     
     // Category Management Routes
     Route::get('/categories', [ArchiveAdminController::class, 'categories'])->name('categories');
