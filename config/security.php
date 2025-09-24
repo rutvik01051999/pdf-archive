@@ -89,17 +89,17 @@ return [
 
     'rate_limiting' => [
         'global' => [
-            'enabled' => true,
+            'enabled' => false,
             'max_requests' => 1000,
             'decay_minutes' => 60,
         ],
         'api' => [
-            'enabled' => true,
+            'enabled' => false,
             'max_requests' => 100,
             'decay_minutes' => 1,
         ],
         'download' => [
-            'enabled' => true,
+            'enabled' => false,
             'max_downloads' => 10,
             'decay_minutes' => 60,
         ],

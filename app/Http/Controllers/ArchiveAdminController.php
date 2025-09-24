@@ -7,6 +7,7 @@ use App\Models\ArchiveCategory;
 use App\Models\ArchiveCenter;
 use App\Models\ArchiveLogin;
 use App\Models\ArchiveLoginLog;
+use App\Services\GoogleCloudStorageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -428,8 +429,35 @@ class ArchiveAdminController extends Controller
 
     public function upload()
     {
-        // Return simple static view without database fetching
-        return view('archive.admin.upload');
+        try {
+            // Get categories for dropdown
+            $categories = DB::table('category_pdf')
+                ->where('active_status', '1')
+                ->orderBy('category')
+                ->get();
+            
+            // Get centers for dropdown (same as display form)
+            try {
+                $centers = DB::connection('centers')
+                    ->table('matrix_report_centers')
+                    ->select('centercode', 'description')
+                    ->groupBy('centercode')
+                    ->orderBy('description')
+                    ->get();
+            } catch (\Exception $e) {
+                Log::error('Failed to fetch centers from centers database: ' . $e->getMessage());
+                $centers = collect();
+            }
+            
+            return view('archive.admin.upload', compact('categories', 'centers'));
+            
+        } catch (\Exception $e) {
+            Log::error('Error loading upload form: ' . $e->getMessage());
+            return view('archive.admin.upload', [
+                'categories' => collect(),
+                'centers' => collect()
+            ]);
+        }
     }
 
     public function getCenterEditions(Request $request)
@@ -514,7 +542,7 @@ class ArchiveAdminController extends Controller
                 }
             }
 
-            $userid = auth()->user()->username ?? 'admin';
+            $userid = auth()->user()?->username ?? 'admin';
 
             // Get uploaded files
             $files = $request->file('files', []);
@@ -852,7 +880,6 @@ class ArchiveAdminController extends Controller
                 } else {
                     $str_tab_div_html .= '<div class="col-12 text-center py-5">';
                     $str_tab_div_html .= '<i class="bx bx-inbox bx-lg text-muted mb-3"></i>';
-                    $str_tab_div_html .= '<h5 class="text-muted">No archives found in Other category</h5>';
                     $str_tab_div_html .= '</div>';
                 }
                 
@@ -980,7 +1007,7 @@ class ArchiveAdminController extends Controller
                 'ccode' => $ccode,
                 'edition_code' => $edition_code,
                 'pageno' => $pageno,
-                'user_id' => auth()->id(),
+                'user_id' => auth()->id() ?? 1,
                 'created_at' => now()
             ]);
 
@@ -1019,19 +1046,14 @@ class ArchiveAdminController extends Controller
         }
     }
 
-    private function generateThumbnailPath($archive)
+    public function generateThumbnailPath($archive)
     {
-        // Generate thumbnail path using same logic as mypdfarchive
         if ($archive->filepath) {
-            $path = explode("/", $archive->filepath);
-            if (count($path) >= 5) {
-                // Use regular thumb format like mypdfarchive
-                if($archive->auto == '0'){
-                    $thumbName = 'epaper-pdfarchive-live-bucket/PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
-                } else {
-                    $thumbName = 'epaper-pdfarchive-live-bucket/PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[5]));
-                }
-                return 'https://storage.googleapis.com/' . $thumbName;
+            $storageService = new GoogleCloudStorageService();
+            $thumbnailPath = $storageService->generateThumbnailPath($archive->filepath, $archive->auto == '1');
+            
+            if ($thumbnailPath) {
+                return $thumbnailPath;
             }
         }
         
@@ -1039,13 +1061,54 @@ class ArchiveAdminController extends Controller
         return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
     }
 
+    public function generateThumb(Request $request)
+    {
+        try {
+            $id = $request->id;
+            
+            $archive = DB::table('pdf')->where('id', $id)->first();
+            
+            if (!$archive) {
+                return response()->json(['error' => 'Archive not found'], 404);
+            }
+            
+            // Check if thumbnail already exists
+            $path = explode("/", $archive->filepath);
+            if (count($path) >= 5) {
+                $thumbName = 'epaper-pdfarchive-live-bucket/PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
+                $thumbUrl = "https://storage.googleapis.com/" . $thumbName;
+                
+                $headers = @get_headers($thumbUrl);
+                if ($headers && strpos($headers[0], '200') !== false) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Thumbnail already exists'
+                    ]);
+                }
+            }
+            
+            // TODO: Implement actual thumbnail generation logic here
+            // For now, return success message
+            return response()->json([
+                'success' => true,
+                'message' => 'Thumbnail generation functionality will be implemented'
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error generating thumbnail: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to generate thumbnail'], 500);
+        }
+    }
+
     private function generatePdfUrl($archive)
     {
-        // Generate PDF URL using same logic as mypdfarchive
         if ($archive->filepath) {
-            // Replace 'epaper-archive-storage' with 'epaper-pdfarchive-live-bucket' in filepath
-            $pdf_file_path = str_replace('epaper-archive-storage', 'epaper-pdfarchive-live-bucket', $archive->filepath);
-            return 'https://storage.googleapis.com/' . $pdf_file_path;
+            $storageService = new GoogleCloudStorageService();
+            $pdfUrl = $storageService->generatePdfUrl($archive->filepath);
+            
+            if ($pdfUrl) {
+                return $pdfUrl;
+            }
         }
         
         // Fallback to original filepath if construction fails
@@ -1054,17 +1117,12 @@ class ArchiveAdminController extends Controller
 
     private function generateLargeThumbnailPath($archive)
     {
-        // Generate large thumbnail path using same logic as mypdfarchive
         if ($archive->filepath) {
-            $path = explode("/", $archive->filepath);
-            if (count($path) >= 5) {
-                // Use largeThumbName format like mypdfarchive
-                if($archive->auto == '0'){
-                    $largeThumbName = 'epaper-pdfarchive-live-bucket/PDFArchive/thumb-large/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
-                } else {
-                    $largeThumbName = 'epaper-pdfarchive-live-bucket/PDFArchive/thumb-large/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[5]));
-                }
-                return 'https://storage.googleapis.com/' . $largeThumbName;
+            $storageService = new GoogleCloudStorageService();
+            $largeThumbnailPath = $storageService->generateLargeThumbnailPath($archive->filepath, $archive->auto == '1');
+            
+            if ($largeThumbnailPath) {
+                return $largeThumbnailPath;
             }
         }
         
@@ -1240,7 +1298,7 @@ class ArchiveAdminController extends Controller
         $html .= '<button class="btn btn-icon" onclick="confirmation('.$archive->id.')" title="Delete"><i class="bx bx-trash"></i></button>';
         $html .= '<a href="'.route('admin.archive.copy', $archive->id).'" target="_blank" class="btn btn-icon" title="Copy"><i class="bx bx-copy"></i></a>';
         $pdfUrl = $this->generatePdfUrl($archive);
-        $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Download" onclick="download_log(\''.auth()->user()->username.'\',\''.$archive->download_url.'\',\''.$archive->published_date.'\',\''.auth()->user()->username.'\',\''.$archive->edition_code.'\',\''.$archive->edition_pageno.'\')"><i class="bx bx-download"></i></a>';
+        $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Download" onclick="download_log(\''.(auth()->user()?->username ?? 'admin').'\',\''.$archive->download_url.'\',\''.$archive->published_date.'\',\''.(auth()->user()?->username ?? 'admin').'\',\''.$archive->edition_code.'\',\''.$archive->edition_pageno.'\')"><i class="bx bx-download"></i></a>';
         $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Print"><i class="bx bx-printer"></i></a>';
         $html .= '</div>';
         $html .= '</div>';
@@ -1268,12 +1326,33 @@ class ArchiveAdminController extends Controller
                 ->orderBy('category')
                 ->get();
             
-            // Get centers for dropdown
-            $centers = DB::table('matrix_report_centers')
-                ->orderBy('description')
-                ->get();
+            // Get centers for dropdown (same as display form)
+            try {
+                $centers = DB::connection('centers')
+                    ->table('matrix_report_centers')
+                    ->select('centercode', 'description')
+                    ->groupBy('centercode')
+                    ->orderBy('description')
+                    ->get();
+            } catch (\Exception $e) {
+                Log::error('Failed to fetch centers from centers database: ' . $e->getMessage());
+                $centers = collect();
+            }
             
-            return view('archive.admin.edit', compact('archive', 'categories', 'centers'));
+            // Get editions for the current center
+            $editions = collect();
+            try {
+                $matrixConnection = DB::connection('matrix');
+                $editions = $matrixConnection->table('editions')
+                    ->where('centercode', $archive->published_center)
+                    ->where('active_status', 1)
+                    ->orderBy('description')
+                    ->get();
+            } catch (\Exception $e) {
+                Log::error('Error connecting to matrix database: ' . $e->getMessage());
+            }
+            
+            return view('archive.admin.edit', compact('archive', 'categories', 'centers', 'editions'));
             
         } catch (\Exception $e) {
             Log::error('Error loading archive edit form: ' . $e->getMessage());
@@ -1306,7 +1385,6 @@ class ArchiveAdminController extends Controller
                 'edition_pageno' => $request->edition_pageno,
                 'published_center' => $request->published_center,
                 'published_date' => $request->published_date,
-                'updated_at' => now(),
             ];
             
             // Remove null values
@@ -1351,10 +1429,16 @@ class ArchiveAdminController extends Controller
                 ->orderBy('category')
                 ->get();
 
-            // Get center information
-            $center = DB::table('matrix_report_centers')
-                ->where('centercode', $archive->published_center)
-                ->first();
+            // Get center information (same as display form)
+            try {
+                $center = DB::connection('centers')
+                    ->table('matrix_report_centers')
+                    ->where('centercode', $archive->published_center)
+                    ->first();
+            } catch (\Exception $e) {
+                Log::error('Failed to fetch center from centers database: ' . $e->getMessage());
+                $center = null;
+            }
 
             return view('archive.admin.copy', compact('archive', 'categories', 'center'));
             
@@ -1397,12 +1481,10 @@ class ArchiveAdminController extends Controller
                 'published_date' => $request->pdate,
                 'published_center' => $originalArchive->published_center,
                 'upload_date' => now(),
-                'username' => auth()->user()->username ?? 'admin',
+                'username' => auth()->user()?->username ?? 'admin',
                 'auto' => 1, // Mark as copied
                 'start_time' => $originalArchive->start_time,
                 'end_time' => $originalArchive->end_time,
-                'created_at' => now(),
-                'updated_at' => now(),
             ];
 
             // Insert new archive

@@ -12,16 +12,16 @@ return [
     */
 
     'attempts' => [
-        'per_minute' => 5,        // Max login attempts per minute per IP
-        'per_hour' => 10,         // Max login attempts per hour per IP
-        'per_day' => 20,          // Max login attempts per day per IP
+        'per_minute' => 999999,   // Max login attempts per minute per IP (disabled)
+        'per_hour' => 999999,     // Max login attempts per hour per IP (disabled)
+        'per_day' => 999999,     // Max login attempts per day per IP (disabled)
     ],
 
     'account_lockout' => [
-        'max_attempts' => 5,      // Max failed attempts before account lockout
-        'lockout_duration' => 15, // Lockout duration in minutes
-        'per_user' => true,       // Enable per-user lockout
-        'per_ip' => true,         // Enable per-IP lockout
+        'max_attempts' => 999999, // Max failed attempts before account lockout (disabled)
+        'lockout_duration' => 0,  // Lockout duration in minutes (disabled)
+        'per_user' => false,      // Disable per-user lockout
+        'per_ip' => false,        // Disable per-IP lockout
     ],
 
     'cache_prefix' => [

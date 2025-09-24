@@ -33,173 +33,105 @@
                     @csrf
                     @method('PUT')
                     
-                    <div class="row g-3">
-                        <div class="col-md-6">
+                    <div class="row">
+                        <!-- Left side - PDF Thumbnail -->
+                        <div class="col-md-2">
                             <div class="mb-3">
-                                <label for="title" class="form-label">Title</label>
-                                <input type="text" 
-                                       class="form-control @error('title') is-invalid @enderror" 
-                                       id="title" 
-                                       name="title" 
-                                       value="{{ old('title', $archive->title) }}"
-                                       placeholder="Enter archive title">
-                                @error('title')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="category" class="form-label">Category <span class="text-danger">*</span></label>
-                                <select class="form-select @error('category') is-invalid @enderror" 
-                                        id="category" 
-                                        name="category" 
-                                        required>
-                                    <option value="">Select Category</option>
-                                    @foreach($categories as $category)
-                                        <option value="{{ $category->category }}" 
-                                                {{ old('category', $archive->category) == $category->category ? 'selected' : '' }}>
-                                            {{ $category->category }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('category')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="edition_name" class="form-label">Edition Name</label>
-                                <input type="text" 
-                                       class="form-control @error('edition_name') is-invalid @enderror" 
-                                       id="edition_name" 
-                                       name="edition_name" 
-                                       value="{{ old('edition_name', $archive->edition_name) }}"
-                                       placeholder="Enter edition name">
-                                @error('edition_name')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="edition_code" class="form-label">Edition Code</label>
-                                <input type="number" 
-                                       class="form-control @error('edition_code') is-invalid @enderror" 
-                                       id="edition_code" 
-                                       name="edition_code" 
-                                       value="{{ old('edition_code', $archive->edition_code) }}"
-                                       placeholder="Enter edition code">
-                                @error('edition_code')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="edition_pageno" class="form-label">Page Number</label>
-                                <input type="number" 
-                                       class="form-control @error('edition_pageno') is-invalid @enderror" 
-                                       id="edition_pageno" 
-                                       name="edition_pageno" 
-                                       value="{{ old('edition_pageno', $archive->edition_pageno) }}"
-                                       placeholder="Enter page number">
-                                @error('edition_pageno')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="published_center" class="form-label">Published Center</label>
-                                <select class="form-select @error('published_center') is-invalid @enderror" 
-                                        id="published_center" 
-                                        name="published_center">
-                                    <option value="">Select Center</option>
-                                    @foreach($centers as $center)
-                                        <option value="{{ $center->centercode }}" 
-                                                {{ old('published_center', $archive->published_center) == $center->centercode ? 'selected' : '' }}>
-                                            {{ $center->description }}
-                                        </option>
-                                    @endforeach
-                                </select>
-                                @error('published_center')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="published_date" class="form-label">Published Date</label>
-                                <input type="date" 
-                                       class="form-control @error('published_date') is-invalid @enderror" 
-                                       id="published_date" 
-                                       name="published_date" 
-                                       value="{{ old('published_date', $archive->published_date) }}">
-                                @error('published_date')
-                                    <div class="invalid-feedback">{{ $message }}</div>
-                                @enderror
-                            </div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="filename" class="form-label">Filename</label>
-                                <input type="text" 
-                                       class="form-control" 
-                                       id="filename" 
-                                       value="{{ $archive->filename }}" 
-                                       readonly>
-                                <div class="form-text">Filename cannot be changed</div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    @if($archive->filepath)
-                    <div class="row g-3">
-                        <div class="col-12">
-                            <div class="mb-3">
-                                <label class="form-label">Current File</label>
-                                <div class="border p-3 rounded bg-light">
-                                    <p class="mb-2"><strong>File Path:</strong> {{ $archive->filepath }}</p>
-                                    <a href="https://storage.googleapis.com/{{ $archive->filepath }}" 
-                                       target="_blank" 
-                                       class="btn btn-sm btn-primary">
-                                        <i class="bx bx-external-link me-1"></i>
-                                        View File
-                                    </a>
+                                <label class="form-label"><strong>PDF Thumb:</strong></label>
+                                <div class="border p-2 text-center" style="min-height: 250px; display: flex; align-items: center; justify-content: center;">
+                                    @php
+                                        $thumbnailPath = (new App\Http\Controllers\ArchiveAdminController())->generateThumbnailPath($archive);
+                                    @endphp
+                                    <img src="{{ $thumbnailPath }}" class="img-fluid" alt="PDF Thumbnail" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';" style="max-height: 250px; object-fit: contain;">
                                 </div>
+                                <button type="button" id="generate_thumb" class="btn btn-sm btn-outline-primary" style="margin-top: 10px; width: 100%;">
+                                    <i class="bx bx-image me-1"></i>
+                                    Generate Thumb
+                                </button>
                             </div>
                         </div>
+                        
+                        <!-- Right side - Form Fields -->
+                        <div class="col-md-8 text-center">
+                            <table class="table table-bordered">
+                                <tr>
+                                    <td><strong>Center:</strong></td>
+                                    <td>
+                                        <input type="hidden" id="id" name="Id" value="{{ $archive->id }}">
+                                        <select class="form-control" name="published_center" id="center" required>
+                                            <option value="">--Select Center--</option>
+                                            @foreach($centers as $center)
+                                                <option value="{{ $center->centercode }}" {{ old('published_center', $archive->published_center) == $center->centercode ? 'selected' : '' }}>
+                                                    {{ $center->description }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Category:</strong></td>
+                                    <td>
+                                        <select class="form-control" name="category" id="category" required>
+                                            <option value="">--Select Category--</option>
+                                            @foreach($categories as $cat)
+                                                <option value="{{ $cat->category }}" {{ old('category', $archive->category) == $cat->category ? 'selected' : '' }}>
+                                                    {{ $cat->category }}
+                                                </option>
+                                            @endforeach
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Edition Name:</strong></td>
+                                    <td>
+                                        @if($archive->category != 'Matrix Auto')
+                                            <input class="form-control" value="{{ old('edition_name', $archive->edition_name) }}" name="edition_name" id="txt_ename" type="text" style="font-size: 14px;">
+                                        @else
+                                            <select class="form-control" name="edition_name" id="ename">
+                                                <option value="">--Select Edition--</option>
+                                                @foreach($editions as $edition)
+                                                    <option value="{{ $edition->EDITIONCODE }}~{{ $edition->DESCRIPTION }}" 
+                                                            {{ old('edition_name', $archive->edition_code.'~'.$archive->edition_name) == $edition->EDITIONCODE.'~'.$edition->DESCRIPTION ? 'selected' : '' }}>
+                                                        {{ $edition->DESCRIPTION }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                        @endif
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Edition Page No:</strong></td>
+                                    <td>
+                                        <select class="form-control" id="pno" name="edition_pageno">
+                                            @for($i = 1; $i <= 100; $i++)
+                                                <option value="{{ $i }}" {{ old('edition_pageno', $archive->edition_pageno) == $i ? 'selected' : '' }}>{{ $i }}</option>
+                                            @endfor
+                                        </select>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Event:</strong></td>
+                                    <td>
+                                        <input class="form-control" value="{{ old('title', $archive->title) }}" required type="text" name="title" id="title">
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Event Description:</strong></td>
+                                    <td>
+                                        <textarea class="form-control" name="event" rows="5" id="event" cols="70">{{ old('event', $archive->event) }}</textarea>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Published Date:</strong></td>
+                                    <td>
+                                        <input class="form-control" value="{{ old('published_date', \Carbon\Carbon::parse($archive->published_date)->format('m/d/Y')) }}" required type="text" name="published_date" id="pdate">
+                                    </td>
+                                </tr>
+                            </table>
+                            <input type="Submit" name="Submit" value="Update" class="submitbutton btn btn-warning text-center">
+                        </div>
                     </div>
-                    @endif
                 </form>
-            </div>
-            
-            <div class="card-footer">
-                <div class="d-flex gap-2">
-                    <button type="submit" form="edit-form" class="btn btn-primary">
-                        <i class="bx bx-save me-1"></i>
-                        Update Archive
-                    </button>
-                    <a href="{{ route('admin.archive.display') }}" class="btn btn-outline-secondary">
-                        <i class="bx bx-x me-1"></i>
-                        Cancel
-                    </a>
-                </div>
             </div>
         </div>
     </div>
@@ -207,8 +139,100 @@
 @endsection
 
 @push('scripts')
+<!-- Flatpickr CSS (already included in layout) -->
+<!-- Flatpickr JS -->
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 <script>
 $(document).ready(function() {
+    // Date picker using native Flatpickr API
+    flatpickr("#pdate", {
+        dateFormat: "m/d/Y",
+        allowInput: true,
+        clickOpens: true,
+        clearBtn: true
+    });
+
+    // Center change handler
+    $("#center").change(function(){
+        var center_id = $(this).val();
+        $.ajax({
+            type:'POST',
+            data:{ 'center_id': center_id },
+            url:'{{ route("admin.archive.get-editions") }}',
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            async:false,
+            success:function(response){
+                $('#ename').empty();
+                $('#ename').append('<option value="">--Select Edition--</option>');
+                if(response.editions && response.editions.length > 0){
+                    for (var i = 0; i < response.editions.length; i++) {
+                        $('#ename').append('<option value="'+response.editions[i]['EDITIONCODE']+'~'+response.editions[i]['DESCRIPTION']+'">'+response.editions[i]['DESCRIPTION']+'</option>');
+                    }
+                }
+            }
+        });
+    });
+
+    // Edition name change handler
+    $('#ename').on('change', function (e) {
+        var str_val = '';
+        var val_arr = this.value.split("~");
+        str_val = val_arr[1];
+        var str_pno = $("#pno").val();
+        str_val += ' Page ' + str_pno;
+        $("#title").val(str_val);
+    });
+    
+    // Page number change handler
+    $("#pno").on('change', function (e) {
+        var val = $('#category').val();
+        if (val == 'Matrix Auto') {
+            var str_ename = $("#ename").val();
+            var str_val = '';
+            var pno = this.value;
+            if(str_ename != ''){
+                var val_arr = str_ename.split("~");
+                str_val = val_arr[1]+' Page '+pno;
+            }else{
+                str_val = 'Page '+pno;
+            }
+            $("#title").val(str_val);
+        }
+    });
+
+    // Generate thumb handler
+    $("#generate_thumb").on('click', function (e) {
+        var id = $("#id").val();
+        $.ajax({
+            type: 'post',
+            url: '{{ route("admin.archive.generate-thumb") }}',
+            data:{ 'id': id },
+            headers: {
+                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+            },
+            async:false,
+            beforeSend: function(){
+                $("#generate_thumb").prop('disabled', true);
+            },
+            success: function (response) {
+                console.log(response);
+                if(response.success){
+                    alert('Thumbnail generated successfully.');
+                }else{
+                    alert(response.message || 'Something went wrong.');
+                }
+                $("#generate_thumb").prop('disabled', false);
+            },
+            error: function (response) {
+                alert('Something went wrong.');
+                $("#generate_thumb").prop('disabled', false);
+            }
+        });
+    });
+
     // Form validation
     $('#edit-form').on('submit', function(e) {
         var isValid = true;
@@ -223,12 +247,7 @@ $(document).ready(function() {
         
         if (!isValid) {
             e.preventDefault();
-            // Show toast notification instead of alert
-            if (typeof toastr !== 'undefined') {
-                toastr.error('Please fill in all required fields.');
-            } else {
-                alert('Please fill in all required fields.');
-            }
+            alert('Please fill in all required fields.');
         }
     });
     

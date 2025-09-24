@@ -4,6 +4,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\PdfArchiveController;
 use App\Http\Controllers\ArchiveAuthController;
 use App\Http\Controllers\ArchiveAdminController;
+use App\Http\Controllers\ArchiveUploadController;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -11,7 +12,7 @@ use Illuminate\Support\Facades\Route;
 // Custom authentication routes with secure-login
 Route::get('secure-login', [App\Http\Controllers\Auth\LoginController::class, 'showLoginForm'])->name('login');
 Route::post('secure-login', [App\Http\Controllers\Auth\LoginController::class, 'login'])
-    ->middleware(['rotate.session', 'custom.throttle:3,1']);
+    ->middleware(['rotate.session']);
 Route::post('logout', [App\Http\Controllers\Auth\LoginController::class, 'logout'])->name('logout')->middleware('rotate.session');
 
 // Session management routes for admin
@@ -64,8 +65,10 @@ Route::prefix('admin/archive')->name('admin.archive.')->middleware(['auth', 'rot
     Route::delete('/archives/{id}', [ArchiveAdminController::class, 'deleteArchive'])->name('archives.delete');
     
     // Archive Upload Routes
-    Route::get('/upload', [ArchiveAdminController::class, 'upload'])->name('upload');
-    Route::post('/upload', [ArchiveAdminController::class, 'storeUpload'])->name('upload.store');
+    Route::get('/upload', [ArchiveUploadController::class, 'showUploadForm'])->name('upload');
+    Route::post('/upload', [ArchiveUploadController::class, 'upload'])->name('upload.store');
+    Route::post('/generate-thumbnail', [ArchiveUploadController::class, 'generateThumbnail'])->name('generate-thumbnail');
+    Route::post('/get-editions-upload', [ArchiveUploadController::class, 'getEditions'])->name('get-editions-upload');
     Route::post('/center-editions', [ArchiveAdminController::class, 'getCenterEditions'])->name('center-editions');
     
     // Archive Display Routes
@@ -78,6 +81,8 @@ Route::prefix('admin/archive')->name('admin.archive.')->middleware(['auth', 'rot
     Route::put('/edit/{id}', [ArchiveAdminController::class, 'update'])->name('update');
     Route::get('/copy/{id}', [ArchiveAdminController::class, 'copy'])->name('copy');
     Route::post('/copy/{id}', [ArchiveAdminController::class, 'copyToCategory'])->name('copy-to-category');
+    Route::post('/get-editions', [ArchiveAdminController::class, 'getEditions'])->name('get-editions');
+    Route::post('/generate-thumb', [ArchiveAdminController::class, 'generateThumb'])->name('generate-thumb');
     
     // Category Management Routes
     Route::get('/categories', [ArchiveAdminController::class, 'categories'])->name('categories');

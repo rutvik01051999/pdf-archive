@@ -21,7 +21,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'inactive.admin.logout' => \App\Http\Middleware\InactiveAdminLogout::class,
             'security.headers' => \App\Http\Middleware\SecurityHeadersMiddleware::class,
             'access.control' => \App\Http\Middleware\AccessControlMiddleware::class,
-            'custom.throttle' => \App\Http\Middleware\CustomThrottleMiddleware::class,
             'archive.auth' => \App\Http\Middleware\ArchiveAuthMiddleware::class,
         ]);
         

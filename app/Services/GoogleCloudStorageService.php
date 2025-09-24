@@ -4,104 +4,102 @@ namespace App\Services;
 
 use Google\Cloud\Storage\StorageClient;
 use Illuminate\Support\Facades\Log;
+use Exception;
 
 class GoogleCloudStorageService
 {
-    protected $storage;
-    protected $bucketName;
+    private $storage;
+    private $bucketName;
+    private $keyFilePath;
 
     public function __construct()
     {
-        $this->bucketName = config('services.google_cloud.bucket_name', 'matrix-archive-bucket');
+        $this->bucketName = 'epaper-pdfarchive-live-bucket';
+        $this->keyFilePath = storage_path('credentials/google-cloud-key.json');
         
         try {
             $this->storage = new StorageClient([
-                'keyFilePath' => config('services.google_cloud.key_file_path'),
-                'projectId' => config('services.google_cloud.project_id')
+                'keyFilePath' => $this->keyFilePath
             ]);
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('Google Cloud Storage initialization failed: ' . $e->getMessage());
             throw $e;
         }
     }
 
     /**
-     * Upload file to Google Cloud Storage
+     * Upload a file to Google Cloud Storage (same as mypdfarchive gu() function)
      */
-    public function uploadFile($localFilePath, $cloudPath, $makePublic = false)
+    public function uploadFile($localFilePath, $cloudPath)
     {
         try {
-            $bucket = $this->storage->bucket($this->bucketName);
-            $file = fopen($localFilePath, 'r');
-            
-            $object = $bucket->upload($file, [
-                'name' => $cloudPath,
-                'metadata' => [
-                    'uploaded_at' => now()->toISOString(),
-                    'uploaded_by' => auth()->user()->username ?? 'system'
-                ]
-            ]);
-
-            // Make file public if requested
-            if ($makePublic) {
-                $object->update(['acl' => []], ['predefinedAcl' => 'PUBLICREAD']);
+            // Check if file exists
+            if (!file_exists($localFilePath)) {
+                throw new Exception("File does not exist: " . $localFilePath);
             }
-
-            // Generate signed URL for private files
-            $expiredTime = new \DateTime('2099-01-01');
-            $signedUrl = $object->signedUrl($expiredTime);
-
-            fclose($file);
             
-            return [
-                'success' => true,
-                'url' => $signedUrl,
-                'path' => $cloudPath,
-                'size' => $object->info()['size'] ?? 0
-            ];
-        } catch (\Exception $e) {
-            Log::error('File upload failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Generate thumbnail and upload to Google Cloud
-     */
-    public function uploadThumbnail($localFilePath, $cloudPath)
-    {
-        try {
-            $bucket = $this->storage->bucket($this->bucketName);
+            // Check if file is readable
+            if (!is_readable($localFilePath)) {
+                throw new Exception("File is not readable: " . $localFilePath);
+            }
+            
+            Log::info('Attempting to upload file: ' . $localFilePath . ' to cloud path: ' . $cloudPath);
+            
             $file = fopen($localFilePath, 'r');
+            if (!$file) {
+                throw new Exception("Could not open file for reading: " . $localFilePath);
+            }
+            
+            $bucket = $this->storage->bucket($this->bucketName);
             
             $object = $bucket->upload($file, [
                 'name' => $cloudPath
             ]);
-
-            // Make thumbnail public
-            $object->update(['acl' => []], ['predefinedAcl' => 'PUBLICREAD']);
-
-            fclose($file);
             
-            return [
-                'success' => true,
-                'path' => $cloudPath,
-                'public_url' => "https://storage.googleapis.com/{$this->bucketName}/{$cloudPath}"
-            ];
-        } catch (\Exception $e) {
-            Log::error('Thumbnail upload failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            // Generate signed URL with long expiration (same as mypdfarchive)
+            $expiredTime = new \DateTime('2099-01-01');
+            $object1 = $bucket->object($cloudPath);
+            $signedUrl = $object1->signedUrl($expiredTime);
+            
+            fclose($file);
+            Log::info('File uploaded successfully to Google Cloud Storage');
+            return $signedUrl;
+            
+        } catch (Exception $e) {
+            Log::error('File upload failed: ' . $e->getMessage());
+            Log::error('File path: ' . $localFilePath);
+            Log::error('Cloud path: ' . $cloudPath);
+            throw $e;
         }
     }
 
     /**
-     * Check if file exists in bucket
+     * Upload thumbnail to Google Cloud Storage (same as mypdfarchive gu_thumb() function)
+     */
+    public function uploadThumbnail($localFilePath, $cloudPath)
+    {
+        try {
+            $file = fopen($localFilePath, 'r');
+            $bucket = $this->storage->bucket($this->bucketName);
+            
+            $object = $bucket->upload($file, [
+                'name' => $cloudPath
+            ]);
+            
+            // Set public read access for thumbnails (same as mypdfarchive)
+            $object->update(['acl' => []], ['predefinedAcl' => 'PUBLICREAD']);
+            
+            fclose($file);
+            return $this->bucketName . '/' . $cloudPath;
+            
+        } catch (Exception $e) {
+            Log::error('Thumbnail upload failed: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Check if file exists in bucket (same as mypdfarchive isBucketFileExists() function)
      */
     public function fileExists($cloudPath)
     {
@@ -109,131 +107,120 @@ class GoogleCloudStorageService
             $bucket = $this->storage->bucket($this->bucketName);
             $object = $bucket->object($cloudPath);
             return $object->exists();
-        } catch (\Exception $e) {
+        } catch (Exception $e) {
             Log::error('File existence check failed: ' . $e->getMessage());
             return false;
         }
     }
 
     /**
-     * Delete file from bucket
-     */
-    public function deleteFile($cloudPath)
-    {
-        try {
-            $bucket = $this->storage->bucket($this->bucketName);
-            $object = $bucket->object($cloudPath);
-            
-            if ($object->exists()) {
-                $object->delete();
-                return ['success' => true];
-            }
-            
-            return ['success' => false, 'error' => 'File not found'];
-        } catch (\Exception $e) {
-            Log::error('File deletion failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Copy file within bucket
-     */
-    public function copyFile($sourcePath, $destinationPath)
-    {
-        try {
-            $bucket = $this->storage->bucket($this->bucketName);
-            $sourceObject = $bucket->object($sourcePath);
-            
-            if (!$sourceObject->exists()) {
-                return ['success' => false, 'error' => 'Source file not found'];
-            }
-            
-            $copiedObject = $sourceObject->copy($this->bucketName, [
-                'name' => $destinationPath
-            ]);
-            
-            return [
-                'success' => true,
-                'path' => $destinationPath
-            ];
-        } catch (\Exception $e) {
-            Log::error('File copy failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
-
-    /**
-     * Get file metadata
+     * Get file metadata (same as mypdfarchive object_metadata() function)
      */
     public function getFileMetadata($cloudPath)
     {
         try {
             $bucket = $this->storage->bucket($this->bucketName);
             $object = $bucket->object($cloudPath);
-            
-            if (!$object->exists()) {
-                return ['success' => false, 'error' => 'File not found'];
-            }
-            
-            $info = $object->info();
-            
-            return [
-                'success' => true,
-                'metadata' => [
-                    'size' => $info['size'] ?? 0,
-                    'content_type' => $info['contentType'] ?? '',
-                    'created' => $info['timeCreated'] ?? '',
-                    'updated' => $info['updated'] ?? '',
-                    'md5_hash' => $info['md5Hash'] ?? ''
-                ]
-            ];
-        } catch (\Exception $e) {
-            Log::error('Metadata retrieval failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return $object->info();
+        } catch (Exception $e) {
+            Log::error('File metadata retrieval failed: ' . $e->getMessage());
+            return null;
         }
     }
 
     /**
-     * List files in bucket with prefix
+     * Generate public URL for file
+     */
+    public function getPublicUrl($cloudPath)
+    {
+        return "https://storage.googleapis.com/{$this->bucketName}/{$cloudPath}";
+    }
+
+    /**
+     * Generate thumbnail path (same logic as mypdfarchive)
+     */
+    public function generateThumbnailPath($filepath, $isAuto = false)
+    {
+        $path = explode("/", $filepath);
+        if (count($path) >= 5) {
+            if ($isAuto) {
+                // Check if path[5] exists before accessing it
+                if (isset($path[5])) {
+                    $thumbName = 'PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[5]));
+                } else {
+                    $thumbName = 'PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
+                }
+            } else {
+                $thumbName = 'PDFArchive/thumb/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
+            }
+            return $this->getPublicUrl($thumbName);
+        }
+        return null;
+    }
+
+    /**
+     * Generate large thumbnail path (same logic as mypdfarchive)
+     */
+    public function generateLargeThumbnailPath($filepath, $isAuto = false)
+    {
+        $path = explode("/", $filepath);
+        if (count($path) >= 5) {
+            if ($isAuto) {
+                // Check if path[5] exists before accessing it
+                if (isset($path[5])) {
+                    $thumbName = 'PDFArchive/thumb-large/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[5]));
+                } else {
+                    $thumbName = 'PDFArchive/thumb-large/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
+                }
+            } else {
+                $thumbName = 'PDFArchive/thumb-large/' . $path[3] . '/' . str_replace(".PDF", ".JPG", str_replace(".pdf", ".jpg", $path[4]));
+            }
+            return $this->getPublicUrl($thumbName);
+        }
+        return null;
+    }
+
+    /**
+     * Generate PDF URL (same logic as mypdfarchive)
+     */
+    public function generatePdfUrl($filepath)
+    {
+        if ($filepath) {
+            // Replace 'epaper-archive-storage' with 'epaper-pdfarchive-live-bucket' in filepath
+            $pdf_file_path = str_replace('epaper-archive-storage', 'epaper-pdfarchive-live-bucket', $filepath);
+            return 'https://storage.googleapis.com/' . $pdf_file_path;
+        }
+        return null;
+    }
+
+    /**
+     * Copy object in bucket (same as mypdfarchive copyObjectInBucket() function)
+     */
+    public function copyObject($sourcePath, $destinationPath)
+    {
+        try {
+            $bucket = $this->storage->bucket($this->bucketName);
+            $object = $bucket->object($sourcePath);
+            $copiedObject = $object->copy($this->bucketName, ['name' => $destinationPath]);
+            return $copiedObject;
+        } catch (Exception $e) {
+            Log::error('Object copy failed: ' . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * List files in bucket with prefix (same as mypdfarchive getBucketFiles() function)
      */
     public function listFiles($prefix = '')
     {
         try {
             $bucket = $this->storage->bucket($this->bucketName);
-            $objects = $bucket->objects([
-                'prefix' => $prefix
-            ]);
-            
-            $files = [];
-            foreach ($objects as $object) {
-                $files[] = [
-                    'name' => $object->name(),
-                    'size' => $object->info()['size'] ?? 0,
-                    'created' => $object->info()['timeCreated'] ?? ''
-                ];
-            }
-            
-            return [
-                'success' => true,
-                'files' => $files
-            ];
-        } catch (\Exception $e) {
+            $objects = $bucket->objects(['prefix' => $prefix]);
+            return $objects;
+        } catch (Exception $e) {
             Log::error('File listing failed: ' . $e->getMessage());
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
+            return [];
         }
     }
 }
-
