@@ -365,10 +365,16 @@ function createArchiveCard(archive) {
     card += '<div class="archive-category">' + (archive.category || 'N/A') + '</div>';
     card += '</div>';
     card += '<div class="archive-actions">';
-    card += '<button class="btn btn-icon" onclick="viewArchive(' + archive.id + ')" title="View Document"><i class="bx bx-file"></i></button>';
+    card += '<a href="/admin/archive/edit/' + archive.id + '" target="_blank" class="btn btn-icon" title="Edit"><i class="bx bx-edit"></i></a>';
     card += '<button class="btn btn-icon" onclick="confirmation(' + archive.id + ')" title="Delete"><i class="bx bx-trash"></i></button>';
-    card += '<button class="btn btn-icon" onclick="editArchive(' + archive.id + ')" title="Edit"><i class="bx bx-edit"></i></button>';
-    card += '<button class="btn btn-icon" onclick="copyArchive(' + archive.id + ')" title="Copy"><i class="bx bx-copy"></i></button>';
+    card += '<a href="/admin/archive/copy/' + archive.id + '" target="_blank" class="btn btn-icon" title="Copy"><i class="bx bx-copy"></i></a>';
+    // Generate PDF URL using same logic as controller
+    var pdfUrl = archive.filepath;
+    if (pdfUrl) {
+        pdfUrl = pdfUrl.replace('epaper-archive-storage', 'epaper-pdfarchive-live-bucket');
+        pdfUrl = 'https://storage.googleapis.com/' + pdfUrl;
+    }
+    card += '<a href="' + pdfUrl + '" target="_blank" class="btn btn-icon" title="Download" onclick="download_log(\'' + archive.id + '\',\'' + archive.download_url + '\',\'' + archive.published_date + '\',\'' + archive.published_center + '\',\'' + archive.edition_code + '\',\'' + archive.edition_pageno + '\')"><i class="bx bx-download"></i></a>';
     card += '<button class="btn btn-icon" onclick="printArchive(' + archive.id + ')" title="Print"><i class="bx bx-printer"></i></button>';
     card += '</div>';
     card += '</div>';
@@ -389,6 +395,24 @@ function printArchive(id) {
     console.log('Print archive:', id);
     // TODO: Implement print functionality
     alert('Print functionality will be implemented later');
+}
+
+// Download log function (same as mypdfarchive)
+function download_log(alias, download_url, date, ccode, edition_code, pageno) {
+    $.ajax({
+        type:'POST',
+        data: { 'alias': alias, 'download_url': download_url, 'date': date, 'ccode': ccode, 'edition_code': edition_code, 'pageno': pageno},
+        url:'{{ route("admin.archive.download-log") }}',
+        headers: {
+            'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
+        },
+        success:function(response){
+            console.log("Download logged successfully");
+        },
+        error: function(xhr, status, error) {
+            console.log("Download log error:", error);
+        }
+    });	
 }
 
 // Update pagination controls

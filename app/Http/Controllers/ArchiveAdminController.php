@@ -1039,6 +1039,19 @@ class ArchiveAdminController extends Controller
         return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';
     }
 
+    private function generatePdfUrl($archive)
+    {
+        // Generate PDF URL using same logic as mypdfarchive
+        if ($archive->filepath) {
+            // Replace 'epaper-archive-storage' with 'epaper-pdfarchive-live-bucket' in filepath
+            $pdf_file_path = str_replace('epaper-archive-storage', 'epaper-pdfarchive-live-bucket', $archive->filepath);
+            return 'https://storage.googleapis.com/' . $pdf_file_path;
+        }
+        
+        // Fallback to original filepath if construction fails
+        return $archive->filepath ?? '#';
+    }
+
     private function generateLargeThumbnailPath($archive)
     {
         // Generate large thumbnail path using same logic as mypdfarchive
@@ -1223,10 +1236,12 @@ class ArchiveAdminController extends Controller
         $html .= '<div class="archive-category">' . ($archive->category ?? 'N/A') . '</div>';
         $html .= '</div>';
         $html .= '<div class="archive-actions">';
-        $html .= '<button class="btn btn-icon" onclick="viewArchive('.$archive->id.')" title="View Document"><i class="bx bx-file"></i></button>';
+        $html .= '<a href="'.route('admin.archive.edit', $archive->id).'" target="_blank" class="btn btn-icon" title="Edit"><i class="bx bx-edit"></i></a>';
         $html .= '<button class="btn btn-icon" onclick="confirmation('.$archive->id.')" title="Delete"><i class="bx bx-trash"></i></button>';
-        $html .= '<button class="btn btn-icon" onclick="copyArchive('.$archive->id.')" title="Copy"><i class="bx bx-copy"></i></button>';
-        $html .= '<button class="btn btn-icon" onclick="printArchive('.$archive->id.')" title="Print"><i class="bx bx-printer"></i></button>';
+        $html .= '<a href="'.route('admin.archive.copy', $archive->id).'" target="_blank" class="btn btn-icon" title="Copy"><i class="bx bx-copy"></i></a>';
+        $pdfUrl = $this->generatePdfUrl($archive);
+        $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Download" onclick="download_log(\''.auth()->user()->username.'\',\''.$archive->download_url.'\',\''.$archive->published_date.'\',\''.auth()->user()->username.'\',\''.$archive->edition_code.'\',\''.$archive->edition_pageno.'\')"><i class="bx bx-download"></i></a>';
+        $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Print"><i class="bx bx-printer"></i></a>';
         $html .= '</div>';
         $html .= '</div>';
         $html .= '</div>';
@@ -1316,6 +1331,90 @@ class ArchiveAdminController extends Controller
             Log::error('Error updating archive: ' . $e->getMessage());
             return redirect()->back()
                 ->with('error', 'Error updating archive: ' . $e->getMessage())
+                ->withInput();
+        }
+    }
+
+    public function copy($id)
+    {
+        try {
+            $archive = DB::table('pdf')->where('id', $id)->first();
+            
+            if (!$archive) {
+                return redirect()->route('admin.archive.display')
+                    ->with('error', 'Archive not found.');
+            }
+
+            // Get categories for dropdown
+            $categories = DB::table('category_pdf')
+                ->where('active_status', '1')
+                ->orderBy('category')
+                ->get();
+
+            // Get center information
+            $center = DB::table('matrix_report_centers')
+                ->where('centercode', $archive->published_center)
+                ->first();
+
+            return view('archive.admin.copy', compact('archive', 'categories', 'center'));
+            
+        } catch (\Exception $e) {
+            Log::error('Error loading copy page: ' . $e->getMessage());
+            return redirect()->route('admin.archive.display')
+                ->with('error', 'Error loading copy page: ' . $e->getMessage());
+        }
+    }
+
+    public function copyToCategory(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'category' => 'required|string',
+                'title' => 'required|string',
+                'event' => 'required|string',
+                'pdate' => 'required|date',
+            ]);
+
+            // Get original archive
+            $originalArchive = DB::table('pdf')->where('id', $id)->first();
+            
+            if (!$originalArchive) {
+                return redirect()->route('admin.archive.display')
+                    ->with('error', 'Original archive not found.');
+            }
+
+            // Prepare data for new archive
+            $newArchiveData = [
+                'filename' => $originalArchive->filename,
+                'filepath' => $originalArchive->filepath,
+                'download_url' => $originalArchive->download_url,
+                'title' => $request->title,
+                'category' => $request->category,
+                'event' => $request->event,
+                'edition_name' => $originalArchive->edition_name,
+                'edition_code' => 0, // Set to 0 for copied archives
+                'edition_pageno' => $originalArchive->edition_pageno,
+                'published_date' => $request->pdate,
+                'published_center' => $originalArchive->published_center,
+                'upload_date' => now(),
+                'username' => auth()->user()->username ?? 'admin',
+                'auto' => 1, // Mark as copied
+                'start_time' => $originalArchive->start_time,
+                'end_time' => $originalArchive->end_time,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+
+            // Insert new archive
+            $newArchiveId = DB::table('pdf')->insertGetId($newArchiveData);
+
+            return redirect()->route('admin.archive.copy', $newArchiveId)
+                ->with('success', 'Successfully copied to selected category!');
+                
+        } catch (\Exception $e) {
+            Log::error('Error copying archive: ' . $e->getMessage());
+            return redirect()->back()
+                ->with('error', 'Error copying archive: ' . $e->getMessage())
                 ->withInput();
         }
     }
