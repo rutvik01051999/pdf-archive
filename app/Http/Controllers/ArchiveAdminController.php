@@ -672,18 +672,43 @@ class ArchiveAdminController extends Controller
             $enddate = $request->input('enddate', '');
             $page = $request->input('page', 0); // New pagination parameter
             $perPage = $request->input('per_page', 18); // Records per page
-
             // Convert date format from yyyy/mm/dd to yyyy-mm-dd (same as mypdfarchive)
             if (!empty($startdate)) {
-                $startdate = \DateTime::createFromFormat('Y/m/d', $startdate);
-                if ($startdate) {
-                    $startdate = $startdate->format('Y-m-d');
+                // Try multiple date formats to handle different input formats
+                $parsedDate = \DateTime::createFromFormat('Y/m/d', $startdate);
+                if (!$parsedDate) {
+                    $parsedDate = \DateTime::createFromFormat('Y-m-d', $startdate);
+                }
+                if (!$parsedDate) {
+                    $parsedDate = \DateTime::createFromFormat('d/m/Y', $startdate);
+                }
+                if (!$parsedDate) {
+                    $parsedDate = \DateTime::createFromFormat('m/d/Y', $startdate);
+                }
+                
+                if ($parsedDate) {
+                    $startdate = $parsedDate->format('Y-m-d');
+                } else {
+                    $startdate = null; // Invalid date format
                 }
             }
             if (!empty($enddate)) {
-                $enddate = \DateTime::createFromFormat('Y/m/d', $enddate);
-                if ($enddate) {
-                    $enddate = $enddate->format('Y-m-d');
+                // Try multiple date formats to handle different input formats
+                $parsedDate = \DateTime::createFromFormat('Y/m/d', $enddate);
+                if (!$parsedDate) {
+                    $parsedDate = \DateTime::createFromFormat('Y-m-d', $enddate);
+                }
+                if (!$parsedDate) {
+                    $parsedDate = \DateTime::createFromFormat('d/m/Y', $enddate);
+                }
+                if (!$parsedDate) {
+                    $parsedDate = \DateTime::createFromFormat('m/d/Y', $enddate);
+                }
+                
+                if ($parsedDate) {
+                    $enddate = $parsedDate->format('Y-m-d');
+                } else {
+                    $enddate = null; // Invalid date format
                 }
             }
 
@@ -691,7 +716,8 @@ class ArchiveAdminController extends Controller
 
             // Build query exactly like mypdfarchive
             $whereConditions = [];
-            
+            // Remove the dd() statement to continue with the query
+
             // Date range filter - only apply if both dates are provided
             if (!empty($startdate) && !empty($enddate)) {
                 $query->whereBetween('published_date', [$startdate, $enddate]);
