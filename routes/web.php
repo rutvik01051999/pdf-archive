@@ -1,7 +1,6 @@
 <?php
 
 use App\Http\Controllers\Admin\DashboardController;
-use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\PdfArchiveController;
 use App\Http\Controllers\ArchiveAuthController;
 use App\Http\Controllers\ArchiveAdminController;
@@ -108,15 +107,6 @@ Route::middleware(SetLocale::class)->group(function () {
     });
     
 
-// Employee Management Routes
-Route::prefix('admin/employees')->name('admin.employees.')->middleware(['auth', 'rotate.session', 'inactive.admin.logout'])->group(function () {
-    Route::get('/', [EmployeeController::class, 'index'])->name('index');
-    Route::get('/create', [EmployeeController::class, 'create'])->name('create');
-    Route::post('/', [EmployeeController::class, 'store'])->name('store');
-    Route::get('/{employee}', [EmployeeController::class, 'show'])->name('show');
-    Route::delete('/{employee}', [EmployeeController::class, 'destroy'])->name('destroy');
-    Route::post('/fetch-data', [EmployeeController::class, 'fetchEmployeeData'])->name('fetch-data');
-});
 
 
 });

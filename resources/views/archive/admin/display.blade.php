@@ -83,40 +83,6 @@
 </div>
 
 <!-- Results Summary & Controls -->
-<div class="row">
-    <div class="col-xl-12">
-        <div class="card custom-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="results-info">
-                        <h6 class="mb-0">
-                            <i class="bx bx-archive me-2"></i>
-                            <span id="TotalVisibleArchive">Showing 0 - </span>
-                            <span id="TotalArchive">0</span> Archives
-                        </h6>
-                    </div>
-                    <!-- <div class="view-controls">
-                        <div class="btn-group" role="group">
-                            <input type="radio" class="btn-check" name="viewMode" id="gridView" value="grid" checked>
-                            <label class="btn btn-outline-primary btn-sm" for="gridView">
-                                <i class="bx bx-grid-alt"></i>
-                            </label>
-                            <input type="radio" class="btn-check" name="viewMode" id="listView" value="list">
-                            <label class="btn btn-outline-primary btn-sm" for="listView">
-                                <i class="bx bx-list-ul"></i>
-                            </label>
-                        </div>
-                        <div class="btn-group ms-2" role="group">
-                            <button class="btn btn-outline-secondary btn-sm" id="refreshResults">
-                                <i class="bx bx-refresh"></i>
-                            </button>
-                        </div>
-                    </div> -->
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
 <!-- Archive Search Results -->
 <div class="row" id="ArchiveSearchRes">
@@ -127,7 +93,6 @@
 <div class="row" id="ResultFilter" style="display: none;">
     <div class="col-12">
         <div class="d-flex flex-wrap gap-2 mb-3">
-            <span class="text-muted small">Editions:</span>
             <div id="edition_tabs">
                 <!-- Tab headers will be populated here -->
             </div>
@@ -572,6 +537,9 @@ function fnGetTabData(edition_code) {
     $('.edition-tab').removeClass('active');
     $('.edition-tab[data-edition="' + edition_code + '"]').addClass('active');
     
+    // Clear current content and show loading
+    $('#edition_tabs_content').html('<div class="col-12 text-center py-5"><i class="bx bx-loader-alt bx-spin bx-lg text-primary mb-3"></i><h5 class="text-muted">Loading...</h5></div>');
+    
     var formData = $('#archiveSearchForm').serializeArray();
     formData.push({name: 'edition_code', value: edition_code});
     formData.push({name: 'pages', value: 0});
@@ -581,17 +549,18 @@ function fnGetTabData(edition_code) {
         type: 'POST',
         data: formData,
         url: '{{ route("admin.archive.search") }}',
-        beforeSend: function(){
-            $("#div_"+edition_code).empty();
-            $("#div_"+edition_code).hide();
-        },
         success: function(response){
             if(response.success && response.str_tab_div_html) {
-                $("#div_"+edition_code).html(response.str_tab_div_html);
-                $("#div_"+edition_code).show();
+                // Wrap content in row div and put in edition_tabs_content
+                $('#edition_tabs_content').html('<div class="row">' + response.str_tab_div_html + '</div>');
                 isEditionChange = 1;
                 editionCurrentPage = 18;
+            } else {
+                $('#edition_tabs_content').html('<div class="row"><div class="col-12 text-center py-5"><i class="bx bx-inbox bx-lg text-muted mb-3"></i><h5 class="text-muted">No archives found</h5></div></div>');
             }
+        },
+        error: function() {
+            $('#edition_tabs_content').html('<div class="col-12 text-center py-5"><i class="bx bx-error bx-lg text-danger mb-3"></i><h5 class="text-danger">Error loading data</h5></div>');
         }
     });
 }
@@ -616,24 +585,14 @@ function fnGetEditionNextPagination(edition_code, total_rec) {
             data: formData,
             url: '{{ route("admin.archive.search") }}',
             beforeSend: function(){
-                $('ul#edition_tabs li a').each(function(i) {
-                    var val = $(this).attr('data-value');
-                    if(val == edition_code){
-                        $(this).removeAttr("onclick");
-                    } else {
-                        var str_fn = "fnGetTabData("+val+");"
-                        $(this).attr("onclick", str_fn);
-                    }
-                });
-                $("#div_"+edition_code).empty();
-                $("#div_"+edition_code).hide();
+                $('#edition_tabs_content').html('<div class="col-12 text-center py-5"><i class="bx bx-loader-alt bx-spin bx-lg text-primary mb-3"></i><h5 class="text-muted">Loading...</h5></div>');
             },
             success: function(response){
                 if(response.success && response.str_tab_div_html) {
-                    $("#div_"+edition_code).html(response.str_tab_div_html);
-                    $("#div_"+edition_code).show();
-                    $("#div_"+edition_code).removeAttr('style');
+                    $('#edition_tabs_content').html('<div class="row">' + response.str_tab_div_html + '</div>');
                     editionCurrentPage = editionCurrentPage + 18;
+                } else {
+                    $('#edition_tabs_content').html('<div class="row"><div class="col-12 text-center py-5"><i class="bx bx-inbox bx-lg text-muted mb-3"></i><h5 class="text-muted">No archives found</h5></div></div>');
                 }
             }
         });
@@ -654,24 +613,14 @@ function fnGetEditionPreviousPagination(edition_code, total_rec) {
             data: formData,
             url: '{{ route("admin.archive.search") }}',
             beforeSend: function(){
-                $('ul#edition_tabs li a').each(function(i) {
-                    var val = $(this).attr('data-value');
-                    if(val == edition_code){
-                        $(this).removeAttr("onclick");
-                    } else {
-                        var str_fn = "fnGetTabData("+val+");"
-                        $(this).attr("onclick", str_fn);
-                    }
-                });
-                $("#div_"+edition_code).empty();
-                $("#div_"+edition_code).hide();
+                $('#edition_tabs_content').html('<div class="col-12 text-center py-5"><i class="bx bx-loader-alt bx-spin bx-lg text-primary mb-3"></i><h5 class="text-muted">Loading...</h5></div>');
             },
             success: function(response){
                 if(response.success && response.str_tab_div_html) {
-                    $("#div_"+edition_code).html(response.str_tab_div_html);
-                    $("#div_"+edition_code).show();
-                    $("#div_"+edition_code).removeAttr('style');
+                    $('#edition_tabs_content').html('<div class="row">' + response.str_tab_div_html + '</div>');
                     editionCurrentPage = editionCurrentPage - 18;
+                } else {
+                    $('#edition_tabs_content').html('<div class="row"><div class="col-12 text-center py-5"><i class="bx bx-inbox bx-lg text-muted mb-3"></i><h5 class="text-muted">No archives found</h5></div></div>');
                 }
             }
         });
@@ -1143,6 +1092,7 @@ function fnGetEditionPreviousPagination(edition_code, total_rec) {
         padding: 0;
         background-color: #fff;
         min-height: 300px;
+        display: flex;
     }
 
     #ResultFilter .tab-pane {
@@ -1191,6 +1141,10 @@ function fnGetEditionPreviousPagination(edition_code, total_rec) {
             margin: 5px;
             display: inline-block;
         }
+    }
+
+    #edition_tabs_content .row{
+        width:-webkit-fill-available;
     }
 </style>
 @endpush

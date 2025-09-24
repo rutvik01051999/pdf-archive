@@ -670,6 +670,7 @@ class ArchiveAdminController extends Controller
             $pno = $request->input('pno', '');
             $startdate = $request->input('startdate', '');
             $enddate = $request->input('enddate', '');
+            $edition_code = $request->input('edition_code', ''); // Tab functionality
             $page = $request->input('page', 0); // New pagination parameter
             $perPage = $request->input('per_page', 18); // Records per page
             // Convert date format from yyyy/mm/dd to yyyy-mm-dd (same as mypdfarchive)
@@ -764,17 +765,11 @@ class ArchiveAdminController extends Controller
                     ->get();
                     $str_tab_div_html = '';
                 
-                // $str_tab_div_html = '<div class="box-footer text-center cls-div-pagination" style="background-color: #e9c8fe;padding:5px;"><button class="btn btn-primary PreviousPaginationEditions" type="button" onclick="fnGetEditionPreviousPagination('.$editionCode.','.$editionTotal.');"><i class="fa fa-toggle-left"></i> Previous</button> <span id="TotalVisibleEditionArchive'.$editionCode.'">Showing '.$tabPage.' to '.min($tabPage + 18, $editionTotal).' of total </span><span id="TotalArchive'.$editionCode.'">'.$editionTotal.'</span>
-                // <button class="btn btn-primary NextPaginationEditions" type="button" onclick="fnGetEditionNextPagination('.$editionCode.','.$editionTotal.');"><i class="fa fa-toggle-right"></i> Next</button></div>';
-                // $str_tab_div_html .= '<div class="row text-center" id="ArchiveSearchRes'.$editionCode.'"><div class="row">';
-                
                 foreach ($editionArchives as $archive) {
                     $thumbnailPath = $this->generateThumbnailPath($archive);
                     $isNew = $this->isNewArchive($archive->filename);
                     $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
                 }
-                
-                $str_tab_div_html .= '</div></div>';
                 
                 return response()->json([
                     'success' => true,
@@ -820,23 +815,15 @@ class ArchiveAdminController extends Controller
                                 ->get();
                             $str_tab_div_html = '';
                             
-                            // $str_tab_div_html .= '<div id="div_'.$edition->edition_code.'" class="cls_edition_tabs tab-pane fade">';
-                            // $str_tab_div_html .= '<div class="box-footer text-center cls-div-pagination" style="background-color: #e9c8fe;padding:5px;"><button class="btn btn-primary PreviousPaginationEditions" type="button" onclick="fnGetEditionPreviousPagination('.$edition->edition_code.','.$editionTotal.');"><i class="fa fa-toggle-left"></i> Previous</button> <span id="TotalVisibleEditionArchive'.$edition->edition_code.'">Showing '.$page.' to '.min($page + $perPage, $editionTotal).' of total </span><span id="TotalArchive'.$edition->edition_code.'">'.$editionTotal.'</span>
-                            // <button class="btn btn-primary NextPaginationEditions" type="button" onclick="fnGetEditionNextPagination('.$edition->edition_code.','.$editionTotal.');"><i class="fa fa-toggle-right"></i> Next</button></div>';
-                            // $str_tab_div_html .= '<div class="row text-center" id="ArchiveSearchRes'.$edition->edition_code.'"><div class="row">';
-                            
                             foreach ($editionArchives as $archive) {
                                 $thumbnailPath = $this->generateThumbnailPath($archive);
                                 $isNew = $this->isNewArchive($archive->filename);
                                 
                                 $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
                             }
-                            
-                            $str_tab_div_html .= '</div></div>';
-                            $str_tab_div_html .= '</div>';
                         } else {
-                            $str_tab_div_html .= '<div id="div_'.$edition->edition_code.'"><div class="row text-center" id="ArchiveSearchRes'.$edition->edition_code.'"><div class="row">';
-                            $str_tab_div_html .= '</div></div></div>';
+                            // Empty content for other tabs - will be loaded via AJAX
+                            $str_tab_div_html .= '';
                         }
                     }
                 }
@@ -856,8 +843,6 @@ class ArchiveAdminController extends Controller
                     ->orderBy('filename')
                     ->get();
                 
-                $str_tab_div_html .= '<div id="div_0"><div class="row text-center" id="ArchiveSearchRes0"><div class="row">';
-                
                 if ($otherArchives->count() > 0) {
                     foreach ($otherArchives as $archive) {
                         $thumbnailPath = $this->generateThumbnailPath($archive);
@@ -870,8 +855,6 @@ class ArchiveAdminController extends Controller
                     $str_tab_div_html .= '<h5 class="text-muted">No archives found in Other category</h5>';
                     $str_tab_div_html .= '</div>';
                 }
-                
-                $str_tab_div_html .= '</div></div></div>';
                 
                 return response()->json([
                     'success' => true,

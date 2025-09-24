@@ -31,11 +31,7 @@ class DashboardController extends Controller
         $thisMonth = Carbon::now()->startOfMonth();
         
         return [
-            'employees' => [
-                'total' => 0,
-                'today' => 0,
-                'this_month' => 0,
-            ],
+            // Module statistics can be added here as needed
         ];
     }
 
