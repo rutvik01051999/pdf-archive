@@ -51,6 +51,9 @@ class ArchiveAdminController extends Controller
      */
     public function categories()
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited categories page');
+        
         // Get centers from the centers database connection
         try {
             $centers = DB::connection('centers')
@@ -119,11 +122,20 @@ class ArchiveAdminController extends Controller
             'category_name' => 'required|string|max:255|unique:category_pdf,category,' . ($request->id ?: 'NULL'),
         ]);
 
+        $isUpdate = !empty($request->id);
+        $action = $isUpdate ? 'updated' : 'created';
+
         if ($request->id == '') {
             // Add new category
             $insertId = DB::table('category_pdf')->insertGetId([
                 'category' => $request->category_name,
                 'active_status' => '1',
+            ]);
+            
+            // Log category creation
+            ActivityLogService::logCategoryActivity($request, 'created', [
+                'category_id' => $insertId,
+                'category_name' => $request->category_name
             ]);
         } else {
             // Update existing category
@@ -133,14 +145,20 @@ class ArchiveAdminController extends Controller
                     'category' => $request->category_name,
                 ]);
             $insertId = $request->id;
+            
+            // Log category update
+            ActivityLogService::logCategoryActivity($request, 'updated', [
+                'category_id' => $insertId,
+                'category_name' => $request->category_name
+            ]);
         }
 
         if ($insertId) {
             $response['status'] = "success";
-            $response['message'] = "Category has been added successfully.";
+            $response['message'] = "Category has been {$action} successfully.";
         } else {
             $response['status'] = "fail";
-            $response['message'] = "Category has been not added successfully.";
+            $response['message'] = "Category has been not {$action} successfully.";
         }
 
         return response()->json($response);
@@ -151,6 +169,11 @@ class ArchiveAdminController extends Controller
      */
     public function editCategory(Request $request, $id)
     {
+        // Log category edit access
+        ActivityLogService::logCategoryActivity($request, 'edit accessed', [
+            'category_id' => $id
+        ]);
+        
         $category = DB::table('category_pdf')
             ->where('id', $id)
             ->first();
@@ -168,11 +191,20 @@ class ArchiveAdminController extends Controller
      */
     public function deleteCategory($id)
     {
+        // Get category data before deletion for logging
+        $category = DB::table('category_pdf')->where('id', $id)->first();
+        
         $result = DB::table('category_pdf')
             ->where('id', $id)
             ->update(['active_status' => '2']);
 
         if ($result) {
+            // Log category deletion
+            ActivityLogService::logCategoryActivity(request(), 'deleted', [
+                'category_id' => $id,
+                'category_name' => $category->category ?? 'Unknown'
+            ]);
+            
             $response['status'] = "success";
             $response['message'] = "Category has been deleted successfully.";
         } else {
@@ -188,6 +220,9 @@ class ArchiveAdminController extends Controller
      */
     public function centers()
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited centers page');
+        
         $centers = ArchiveCenter::orderBy('description')->get();
         
         return view('archive.admin.centers', compact('centers'));
@@ -207,7 +242,14 @@ class ArchiveAdminController extends Controller
             'status' => 'boolean'
         ]);
 
-        ArchiveCenter::create($request->all());
+        $center = ArchiveCenter::create($request->all());
+        
+        // Log center creation
+        ActivityLogService::logCenterActivity($request, 'created', [
+            'center_id' => $center->id,
+            'center_code' => $center->center_code,
+            'description' => $center->description
+        ]);
 
         return response()->json([
             'success' => true,
@@ -232,6 +274,13 @@ class ArchiveAdminController extends Controller
         ]);
 
         $center->update($request->all());
+        
+        // Log center update
+        ActivityLogService::logCenterActivity($request, 'updated', [
+            'center_id' => $center->id,
+            'center_code' => $center->center_code,
+            'description' => $center->description
+        ]);
 
         return response()->json([
             'success' => true,
@@ -254,6 +303,13 @@ class ArchiveAdminController extends Controller
             ], 400);
         }
 
+        // Log center deletion before deleting
+        ActivityLogService::logCenterActivity(request(), 'deleted', [
+            'center_id' => $center->id,
+            'center_code' => $center->center_code,
+            'description' => $center->description
+        ]);
+
         $center->delete();
 
         return response()->json([
@@ -267,6 +323,9 @@ class ArchiveAdminController extends Controller
      */
     public function users()
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited users page');
+        
         $users = ArchiveLogin::with('center')->orderBy('uname')->get();
         $centers = ArchiveCenter::active()->orderBy('description')->get();
         
@@ -284,7 +343,16 @@ class ArchiveAdminController extends Controller
             'status' => 'required|boolean'
         ]);
 
+        $oldStatus = $user->status;
         $user->update(['status' => $request->status]);
+        
+        // Log user status update
+        ActivityLogService::logAdminActivity('user status updated', $user, [
+            'user_id' => $user->id,
+            'username' => $user->uname,
+            'old_status' => $oldStatus,
+            'new_status' => $request->status
+        ]);
 
         return response()->json([
             'success' => true,
@@ -297,6 +365,9 @@ class ArchiveAdminController extends Controller
      */
     public function loginLogs(Request $request)
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited login logs page');
+        
         $query = ArchiveLoginLog::with(['login', 'center']);
 
         if ($request->filled('username')) {
@@ -425,12 +496,18 @@ class ArchiveAdminController extends Controller
      */
     public function specialDates()
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited special dates page');
+        
         return view('archive.admin.special-dates');
     }
 
     public function upload()
     {
         try {
+            // Log page visit
+            ActivityLogService::logAdminActivity('visited upload page');
+            
             // Get categories for dropdown
             $categories = DB::table('category_pdf')
                 ->where('active_status', '1')
@@ -638,6 +715,15 @@ class ArchiveAdminController extends Controller
                             ]);
 
                             if ($insertId) {
+                                // Log archive upload
+                                ActivityLogService::logArchiveUpload($request, [
+                                    'archive_id' => $insertId,
+                                    'filename' => $originalFilename,
+                                    'category' => $category,
+                                    'center' => $center,
+                                    'edition_name' => $edition_name,
+                                    'published_date' => $pdate
+                                ]);
                                 $response = 'success';
                             }
                         } else {
@@ -668,6 +754,9 @@ class ArchiveAdminController extends Controller
 
     public function display()
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited archive display page');
+        
         // Get centers from the centers database connection (same as mypdfarchive)
         try {
             $centers = DB::connection('centers')
@@ -890,9 +979,9 @@ class ArchiveAdminController extends Controller
                         $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
                     }
                 } else {
-                    $str_tab_div_html .= '<div class="col-12 text-center py-5">';
-                    $str_tab_div_html .= '<i class="bx bx-inbox bx-lg text-muted mb-3"></i>';
-                    $str_tab_div_html .= '</div>';
+                    // $str_tab_div_html .= '<div class="col-12 text-center py-5">';
+                    // $str_tab_div_html .= '<i class="bx bx-inbox bx-lg text-muted mb-3"></i>';
+                    // $str_tab_div_html .= '</div>';
                 }
                 
                 return response()->json([
@@ -1037,6 +1126,15 @@ class ArchiveAdminController extends Controller
             
             $archive = DB::table('pdf')->where('id', $id)->first();
             if ($archive) {
+                // Log archive deletion before deleting
+                ActivityLogService::logArchiveDelete($request, $id, [
+                    'filename' => $archive->filename,
+                    'category' => $archive->category,
+                    'center' => $archive->published_center,
+                    'edition_name' => $archive->edition_name,
+                    'published_date' => $archive->published_date
+                ]);
+                
                 // Delete file if exists
                 if (!empty($archive->filepath)) {
                     $filePath = storage_path('app/public/' . $archive->filepath);
@@ -1196,12 +1294,22 @@ class ArchiveAdminController extends Controller
             'description' => 'required|string|max:255',
         ]);
 
+        $isUpdate = !empty($request->id);
+        $action = $isUpdate ? 'updated' : 'created';
+
         if ($request->id == '') {
             // Add new special date
             $insertId = DB::table('special_dates')->insertGetId([
                 'special_date' => $request->special_date,
                 'description' => $request->description,
                 'active_status' => '1',
+            ]);
+            
+            // Log special date creation
+            ActivityLogService::logSpecialDatesActivity($request, 'created', [
+                'special_date_id' => $insertId,
+                'special_date' => $request->special_date,
+                'description' => $request->description
             ]);
         } else {
             // Update existing special date
@@ -1212,14 +1320,21 @@ class ArchiveAdminController extends Controller
                     'description' => $request->description,
                 ]);
             $insertId = $request->id;
+            
+            // Log special date update
+            ActivityLogService::logSpecialDatesActivity($request, 'updated', [
+                'special_date_id' => $insertId,
+                'special_date' => $request->special_date,
+                'description' => $request->description
+            ]);
         }
 
         if ($insertId) {
             $response['status'] = "success";
-            $response['message'] = "Special date has been added successfully.";
+            $response['message'] = "Special date has been {$action} successfully.";
         } else {
             $response['status'] = "fail";
-            $response['message'] = "Special date has been not added successfully.";
+            $response['message'] = "Special date has been not {$action} successfully.";
         }
         return response()->json($response);
     }
@@ -1230,6 +1345,11 @@ class ArchiveAdminController extends Controller
     public function editSpecialDate($id)
     {
         try {
+            // Log special date edit access
+            ActivityLogService::logSpecialDatesActivity(request(), 'edit accessed', [
+                'special_date_id' => $id
+            ]);
+            
             $specialDate = DB::table('special_dates')
                 ->select(['id', 'special_date', 'description'])
                 ->where('id', $id)
@@ -1263,11 +1383,21 @@ class ArchiveAdminController extends Controller
     public function deleteSpecialDate($id)
     {
         try {
+            // Get special date data before deletion for logging
+            $specialDate = DB::table('special_dates')->where('id', $id)->first();
+            
             $result = DB::table('special_dates')
                 ->where('id', $id)
                 ->update(['active_status' => '2']);
 
             if ($result) {
+                // Log special date deletion
+                ActivityLogService::logSpecialDatesActivity(request(), 'deleted', [
+                    'special_date_id' => $id,
+                    'special_date' => $specialDate->special_date ?? 'Unknown',
+                    'description' => $specialDate->description ?? 'Unknown'
+                ]);
+                
                 $response['status'] = "success";
                 $response['message'] = "Special date has been deleted successfully.";
             } else {
@@ -1325,6 +1455,11 @@ class ArchiveAdminController extends Controller
     public function edit($id)
     {
         try {
+            // Log page visit
+            ActivityLogService::logAdminActivity('visited archive edit page', null, [
+                'archive_id' => $id
+            ]);
+            
             $archive = DB::table('pdf')->where('id', $id)->first();
             
             if (!$archive) {
@@ -1431,6 +1566,11 @@ class ArchiveAdminController extends Controller
     public function copy($id)
     {
         try {
+            // Log page visit
+            ActivityLogService::logAdminActivity('visited archive copy page', null, [
+                'archive_id' => $id
+            ]);
+            
             $archive = DB::table('pdf')->where('id', $id)->first();
             
             if (!$archive) {
@@ -1504,6 +1644,16 @@ class ArchiveAdminController extends Controller
 
             // Insert new archive
             $newArchiveId = DB::table('pdf')->insertGetId($newArchiveData);
+            
+            // Log archive copy
+            ActivityLogService::logArchiveCopy($request, $id, $newArchiveId, [
+                'original_archive_id' => $id,
+                'new_archive_id' => $newArchiveId,
+                'category' => $request->category,
+                'title' => $request->title,
+                'event' => $request->event,
+                'published_date' => $request->pdate
+            ]);
 
             return redirect()->route('admin.archive.copy', $newArchiveId)
                 ->with('success', 'Successfully copied to selected category!');

@@ -9,7 +9,16 @@
                 </tr>
                 <tr>
                     <td class="fw-semibold">User:</td>
-                    <td>{{ $activity->causer ? $activity->causer->name : 'System' }}</td>
+                    <td>
+                        @if($activity->causer)
+                            {{ $activity->causer->admin_full_name ?: $activity->causer->username }}
+                            @if($activity->causer->center)
+                                <small class="text-muted">(Center: {{ $activity->causer->center }})</small>
+                            @endif
+                        @else
+                            System
+                        @endif
+                    </td>
                 </tr>
                 <tr>
                     <td class="fw-semibold">Date & Time:</td>

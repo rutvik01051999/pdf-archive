@@ -685,7 +685,6 @@ function fnGetEditionPreviousPagination(edition_code, total_rec) {
 
     .archive-thumbnail {
         width: 100%;
-        height: 200px;
         object-fit: cover;
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         border-radius: 8px;

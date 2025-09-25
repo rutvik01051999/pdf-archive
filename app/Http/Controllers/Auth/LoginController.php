@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Services\HonoAuthService;
+use App\Services\ActivityLogService;
 use App\Models\User;
 use Illuminate\Foundation\Auth\AuthenticatesUsers;
 use Illuminate\Http\Request;
@@ -150,6 +151,15 @@ class LoginController extends Controller
         // Step 4: Login the user
         Auth::login($user, $request->filled('remember'));
         $request->session()->regenerate();
+        
+        // Log successful login using ActivityLogService
+        ActivityLogService::logAdminLogin($request, $user, [
+            'login_type' => 'hono_authentication',
+            'center' => $center,
+            'hono_data' => $honoData
+        ]);
+        
+        // Keep existing Laravel log for backward compatibility
         $this->logHonoLogin($request, $user, $honoData);
         
         Log::info('Admin authentication successful - Both third-party and database validation passed', [
@@ -288,6 +298,17 @@ class LoginController extends Controller
     {
         $emailOrUsername = $request->input('email');
         
+        // Log failed login attempt using ActivityLogService
+        ActivityLogService::logFailedLogin($request, [
+            'super_admin_result' => $superAdminResult,
+            'admin_result' => $adminResult,
+            'error_details' => [
+                'super_admin_message' => $superAdminResult['message'] ?? null,
+                'admin_message' => $adminResult['message'] ?? null
+            ]
+        ]);
+        
+        // Keep existing Laravel log for backward compatibility
         Log::warning('Login attempt failed', [
             'username' => $emailOrUsername,
             'ip' => $request->ip(),
@@ -357,6 +378,10 @@ class LoginController extends Controller
     {
         $user = Auth::user();
         
+        // Log logout using ActivityLogService
+        ActivityLogService::logAdminLogout($request, $user);
+        
+        // Keep existing Laravel log for backward compatibility
         Log::info('User logout', [
             'user_id' => $user->id ?? null,
             'username' => $user->username ?? null,

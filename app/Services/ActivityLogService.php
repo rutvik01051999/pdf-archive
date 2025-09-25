@@ -25,7 +25,7 @@ class ActivityLogService
             ->withProperties(array_merge($properties, [
                 'type' => 'admin_activity',
                 'admin_user_id' => $user->id,
-                'admin_user_name' => $user->name ?? 'Unknown',
+                'admin_user_name' => $user->admin_full_name ?: $user->username,
                 'source' => 'admin'
             ]));
 
@@ -34,6 +34,76 @@ class ActivityLogService
         }
 
         $log->log($action);
+    }
+
+    /**
+     * Log admin login activity
+     */
+    public static function logAdminLogin(Request $request, $user, array $loginData = [])
+    {
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'login_data' => $loginData,
+                'login_type' => 'admin_login',
+                'user_id' => $user->id,
+                'username' => $user->username,
+                'center' => $user->center ?? null,
+                'type' => 'admin_login',
+                'source' => 'authentication'
+            ])
+            ->log("Admin login successful");
+    }
+
+    /**
+     * Log admin logout activity
+     */
+    public static function logAdminLogout(Request $request, $user = null)
+    {
+        $properties = [
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'login_type' => 'admin_logout',
+            'type' => 'admin_logout',
+            'source' => 'authentication'
+        ];
+
+        if ($user) {
+            $properties['user_id'] = $user->id;
+            $properties['username'] = $user->username;
+            $properties['center'] = $user->center ?? null;
+        }
+
+        activity()
+            ->causedBy($user)
+            ->withProperties($properties)
+            ->log("Admin logout");
+    }
+
+    /**
+     * Log failed login attempt
+     */
+    public static function logFailedLogin(Request $request, array $loginAttempt = [])
+    {
+        activity()
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'login_attempt' => $loginAttempt,
+                'username_attempted' => $request->input('email'),
+                'center_attempted' => $request->input('center'),
+                'type' => 'failed_login',
+                'source' => 'authentication'
+            ])
+            ->log("Failed login attempt");
     }
 
     /**
@@ -72,6 +142,8 @@ class ActivityLogService
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
                 'archive_data' => self::sanitizeArchiveData($archiveData),
+                'subject_type' => 'Archive',
+                'subject_id' => $archiveData['archive_id'] ?? null,
                 'type' => 'archive_upload',
                 'source' => 'admin'
             ])
@@ -94,6 +166,8 @@ class ActivityLogService
                 'user_agent' => $request->userAgent(),
                 'archive_id' => $archiveId,
                 'changes' => $changes,
+                'subject_type' => 'Archive',
+                'subject_id' => $archiveId,
                 'type' => 'archive_edit',
                 'source' => 'admin'
             ])
@@ -116,6 +190,8 @@ class ActivityLogService
                 'user_agent' => $request->userAgent(),
                 'archive_id' => $archiveId,
                 'archive_data' => self::sanitizeArchiveData($archiveData),
+                'subject_type' => 'Archive',
+                'subject_id' => $archiveId,
                 'type' => 'archive_delete',
                 'source' => 'admin'
             ])
@@ -139,6 +215,8 @@ class ActivityLogService
                 'original_archive_id' => $originalArchiveId,
                 'new_archive_id' => $newArchiveId,
                 'copy_data' => self::sanitizeArchiveData($copyData),
+                'subject_type' => 'Archive',
+                'subject_id' => $newArchiveId,
                 'type' => 'archive_copy',
                 'source' => 'admin'
             ])
@@ -225,6 +303,8 @@ class ActivityLogService
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
                 'category_data' => $categoryData,
+                'subject_type' => 'Category',
+                'subject_id' => $categoryData['category_id'] ?? null,
                 'type' => 'category_management',
                 'source' => 'admin'
             ])
@@ -246,10 +326,35 @@ class ActivityLogService
                 'ip' => $request->ip(),
                 'user_agent' => $request->userAgent(),
                 'center_data' => $centerData,
+                'subject_type' => 'Center',
+                'subject_id' => $centerData['center_id'] ?? null,
                 'type' => 'center_management',
                 'source' => 'admin'
             ])
             ->log("Center {$action}");
+    }
+
+    /**
+     * Log special dates management activity
+     */
+    public static function logSpecialDatesActivity(Request $request, string $action, $specialDateData = [])
+    {
+        $user = Auth::user();
+        
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'special_date_data' => $specialDateData,
+                'subject_type' => 'SpecialDate',
+                'subject_id' => $specialDateData['special_date_id'] ?? null,
+                'type' => 'special_dates_management',
+                'source' => 'admin'
+            ])
+            ->log("Special date {$action}");
     }
 
     /**
@@ -290,6 +395,10 @@ class ActivityLogService
             'thumbnail_generations' => Activity::whereJsonContains('properties->type', 'thumbnail_generation')->count(),
             'category_activities' => Activity::whereJsonContains('properties->type', 'category_management')->count(),
             'center_activities' => Activity::whereJsonContains('properties->type', 'center_management')->count(),
+            'special_dates_activities' => Activity::whereJsonContains('properties->type', 'special_dates_management')->count(),
+            'admin_logins' => Activity::whereJsonContains('properties->type', 'admin_login')->count(),
+            'admin_logouts' => Activity::whereJsonContains('properties->type', 'admin_logout')->count(),
+            'failed_logins' => Activity::whereJsonContains('properties->type', 'failed_login')->count(),
         ];
     }
 }

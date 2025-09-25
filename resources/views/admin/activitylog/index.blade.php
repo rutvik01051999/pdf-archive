@@ -13,7 +13,7 @@
     @include('admin.layouts.partials.alert')
 
     <!-- Activity Statistics -->
-    <div class="row mb-4">
+    {{-- <div class="row mb-4">
         <div class="col-xl-3 col-lg-6 col-md-6 col-sm-12">
             <div class="card custom-card">
                 <div class="card-body">
@@ -85,7 +85,7 @@
                 </div>
             </div>
         </div>
-    </div>
+    </div> --}}
 
     <div class="row">
         <div class="col-xl-12">
@@ -117,10 +117,12 @@
 @push('scripts')
     {{ $dataTable->scripts(attributes: ['type' => 'module']) }}
     
+    <!-- Activity Logs JavaScript -->
+    <script src="{{ asset('assets/js/activity-logs.js') }}"></script>
     <script>
-        function refreshTable() {
-            $('#activitylog-table').DataTable().ajax.reload();
-        }
+        // Set up URLs for the activity logs functionality
+        window.activityLogDetailsUrl = '{{ route("admin.activities.activity-logs.details", ":id") }}';
+        window.archiveEditUrl = '{{ route("admin.archive.edit", ":id") }}';
     </script>
 @endpush
 

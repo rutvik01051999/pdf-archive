@@ -185,6 +185,11 @@ class SecurityHeadersMiddleware
      */
     protected function logSuspiciousActivity(Request $request): void
     {
+        // Skip suspicious activity detection for DataTable AJAX requests
+        if ($this->isDataTableRequest($request)) {
+            return;
+        }
+
         $suspiciousPatterns = [
             'sql' => ['union', 'select', 'insert', 'update', 'delete', 'drop', 'create'],
             'xss' => ['<script', 'javascript:', 'onload=', 'onerror='],
@@ -211,6 +216,36 @@ class SecurityHeadersMiddleware
                 }
             }
         }
+    }
+
+    /**
+     * Check if request is a DataTable AJAX request
+     */
+    protected function isDataTableRequest(Request $request): bool
+    {
+        // Check if it's an AJAX request with DataTable parameters
+        if (!$request->ajax()) {
+            return false;
+        }
+
+        // Check for DataTable specific parameters
+        $dataTableParams = [
+            'draw', 'columns', 'order', 'start', 'length', 'search'
+        ];
+
+        foreach ($dataTableParams as $param) {
+            if ($request->has($param)) {
+                return true;
+            }
+        }
+
+        // Check if URL contains DataTable patterns
+        $url = $request->fullUrl();
+        if (str_contains($url, 'columns%5B') || str_contains($url, 'order%5B')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

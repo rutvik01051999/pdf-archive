@@ -26,7 +26,9 @@ class ActivityLogDataTable extends DataTable
             ->addIndexColumn()
             ->addColumn('causer', function ($row) {
                 if ($row->causer) {
-                    return $row->causer->name ?? 'Admin User';
+                    $userName = $row->causer->admin_full_name ?: $row->causer->username;
+                    $center = $row->causer->center ? ' (' . $row->causer->center . ')' : '';
+                    return $userName . $center;
                 }
                 
                 // For system activities, show IP and user agent info
@@ -63,6 +65,10 @@ class ActivityLogDataTable extends DataTable
                     'thumbnail_generation' => '<span class="badge bg-warning">Thumbnail Generation</span>',
                     'category_management' => '<span class="badge bg-primary">Category Management</span>',
                     'center_management' => '<span class="badge bg-success">Center Management</span>',
+                    'special_dates_management' => '<span class="badge bg-info">Special Dates Management</span>',
+                    'admin_login' => '<span class="badge bg-success">Admin Login</span>',
+                    'admin_logout' => '<span class="badge bg-warning">Admin Logout</span>',
+                    'failed_login' => '<span class="badge bg-danger">Failed Login</span>',
                     'admin_activity' => '<span class="badge bg-primary">Admin Activity</span>',
                 ];
                 
@@ -101,7 +107,7 @@ class ActivityLogDataTable extends DataTable
         return $this->builder()
             ->setTableId('activitylog-table')
             ->columns($this->getColumns())
-            ->minifiedAjax(url()->secure(route('admin.activities.activity-logs.index')))
+            ->minifiedAjax(route('admin.activities.activity-logs.index'))
             ->parameters([
                 'dom' => 'Bfrtip',
                 'buttons' => [
