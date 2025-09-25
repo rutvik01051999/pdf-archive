@@ -61,9 +61,158 @@ $(document).ready(function() {
         }
     });
 
+    // XSS Protection functions
+    function sanitizeInput(input) {
+        if (!input) return '';
+        
+        // Remove HTML tags
+        input = input.replace(/<[^>]*>/g, '');
+        
+        // Remove script tags and content
+        input = input.replace(/<script[^>]*>.*?<\/script>/gi, '');
+        input = input.replace(/<script[^>]*>/gi, '');
+        
+        // Remove event handlers
+        input = input.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '');
+        
+        // Remove javascript: URLs
+        input = input.replace(/javascript:/gi, '');
+        
+        // Remove suspicious characters
+        input = input.replace(/[<>"'&\\/;|`$]/g, '');
+        
+        return input.trim();
+    }
+
+    function validateSpecialDateDescription(description) {
+        if (!description || description.length < 3) {
+            return { valid: false, message: 'Description must be at least 3 characters long.' };
+        }
+        
+        if (description.length > 200) {
+            return { valid: false, message: 'Description must not exceed 200 characters.' };
+        }
+        
+        // Check for allowed characters only
+        if (!/^[a-zA-Z0-9\s\-_.,()!?@#$%&*]+$/.test(description)) {
+            return { valid: false, message: 'Description contains invalid characters. Only letters, numbers, spaces, and common punctuation are allowed.' };
+        }
+        
+        // Check for XSS patterns
+        const xssPatterns = [
+            /<script[^>]*>/i,
+            /javascript:/i,
+            /on\w+\s*=/i,
+            /<iframe[^>]*>/i,
+            /<object[^>]*>/i,
+            /<embed[^>]*>/i,
+            /<form[^>]*>/i,
+            /<input[^>]*>/i,
+            /<meta[^>]*>/i,
+            /<link[^>]*>/i,
+            /<style[^>]*>/i,
+            /expression\s*\(/i,
+            /url\s*\(/i,
+            /vbscript:/i,
+            /data:/i
+        ];
+        
+        for (const pattern of xssPatterns) {
+            if (pattern.test(description)) {
+                return { valid: false, message: 'Description contains potentially harmful content.' };
+            }
+        }
+        
+        // Check for SQL injection patterns
+        const sqlPatterns = [
+            /union\s+select/i,
+            /drop\s+table/i,
+            /delete\s+from/i,
+            /insert\s+into/i,
+            /update\s+set/i,
+            /select\s+.*\s+from/i,
+            /or\s+1\s*=\s*1/i,
+            /and\s+1\s*=\s*1/i,
+            /'\s*or\s*'/i,
+            /'\s*and\s*'/i
+        ];
+        
+        for (const pattern of sqlPatterns) {
+            if (pattern.test(description)) {
+                return { valid: false, message: 'Description contains potentially harmful content.' };
+            }
+        }
+        
+        return { valid: true };
+    }
+
+    function validateSpecialDate(dateString) {
+        if (!dateString || !dateString.match(/^\d{2}-\d{2}$/)) {
+            return { valid: false, message: 'Please select both day and month.' };
+        }
+        
+        const parts = dateString.split('-');
+        const day = parseInt(parts[0]);
+        const month = parseInt(parts[1]);
+        
+        if (day < 1 || day > 31) {
+            return { valid: false, message: 'Invalid day. Day must be between 1 and 31.' };
+        }
+        
+        if (month < 1 || month > 12) {
+            return { valid: false, message: 'Invalid month. Month must be between 1 and 12.' };
+        }
+        
+        // Check for invalid date combinations
+        if (month === 2 && day > 29) {
+            return { valid: false, message: 'Invalid date. February has maximum 29 days.' };
+        }
+        
+        if ([4, 6, 9, 11].includes(month) && day > 30) {
+            return { valid: false, message: 'Invalid date. This month has maximum 30 days.' };
+        }
+        
+        return { valid: true };
+    }
+
+    function showValidationError(message) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Validation Error',
+                text: message,
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        } else {
+            alert('Validation Error: ' + message);
+        }
+    }
+
     // Special Date management functions
     SpecialDateJquery = {
         AddSpecialDate: function() {
+            // Get and validate form data
+            const description = $('#description').val().trim();
+            const specialDate = $('#special_date').val().trim();
+            
+            // Sanitize inputs
+            const sanitizedDescription = sanitizeInput(description);
+            $('#description').val(sanitizedDescription);
+            
+            // Validate description
+            const descriptionValidation = validateSpecialDateDescription(sanitizedDescription);
+            if (!descriptionValidation.valid) {
+                showValidationError(descriptionValidation.message);
+                return;
+            }
+            
+            // Validate special date
+            const dateValidation = validateSpecialDate(specialDate);
+            if (!dateValidation.valid) {
+                showValidationError(dateValidation.message);
+                return;
+            }
+            
             $.ajax({
                 type: 'POST',
                 data: $('#defaultForm').serializeArray(),
@@ -200,12 +349,78 @@ $(document).ready(function() {
         }
     };
 
+    // Real-time input validation and sanitization
+    $('#description').on('input', function() {
+        const input = $(this);
+        const value = input.val();
+        const sanitized = sanitizeInput(value);
+        
+        // Update the input with sanitized value if it changed
+        if (sanitized !== value) {
+            input.val(sanitized);
+        }
+        
+        // Real-time validation feedback
+        if (sanitized.length > 0) {
+            const validation = validateSpecialDateDescription(sanitized);
+            if (!validation.valid) {
+                input.addClass('is-invalid');
+                input.removeClass('is-valid');
+                
+                // Show validation message
+                let feedback = input.siblings('.invalid-feedback');
+                if (feedback.length === 0) {
+                    feedback = $('<div class="invalid-feedback"></div>');
+                    input.after(feedback);
+                }
+                feedback.text(validation.message);
+            } else {
+                input.addClass('is-valid');
+                input.removeClass('is-invalid');
+            }
+        } else {
+            input.removeClass('is-valid is-invalid');
+        }
+    });
+
+    // Validate special date when dropdowns change
+    $('#day_select, #month_select').on('change', function() {
+        updateSpecialDate();
+        
+        // Validate the special date
+        const specialDate = $('#special_date').val();
+        if (specialDate) {
+            const validation = validateSpecialDate(specialDate);
+            if (!validation.valid) {
+                $('#day_select, #month_select').addClass('is-invalid');
+                $('#day_select, #month_select').removeClass('is-valid');
+                
+                // Show validation message
+                let feedback = $('.date-validation-feedback');
+                if (feedback.length === 0) {
+                    feedback = $('<div class="invalid-feedback date-validation-feedback"></div>');
+                    $('#special_date').after(feedback);
+                }
+                feedback.text(validation.message);
+            } else {
+                $('#day_select, #month_select').addClass('is-valid');
+                $('#day_select, #month_select').removeClass('is-invalid');
+                $('.date-validation-feedback').remove();
+            }
+        }
+    });
+
     // Event handlers
     $('#addNew').on('click', function() {
         $('#form').show();
         $('#id').val("");
         $('#dataTable').hide();
         $('input').css("border-color", "");
+        
+        // Clear validation states
+        $('#description').removeClass('is-valid is-invalid');
+        $('#day_select, #month_select').removeClass('is-valid is-invalid');
+        $('.invalid-feedback').remove();
     });
 
     $('#cancel').on('click', function() {

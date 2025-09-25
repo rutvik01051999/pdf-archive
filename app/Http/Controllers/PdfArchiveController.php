@@ -5,8 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\PdfArchive;
 use App\Models\ArchiveCategory;
 use App\Models\ArchiveCenter;
-use App\Services\GoogleCloudStorageService;
+use App\Traits\GoogleCloudStorageTrait;
 use App\Services\PdfProcessingService;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -15,20 +16,35 @@ use Carbon\Carbon;
 
 class PdfArchiveController extends Controller
 {
-    protected $googleCloudService;
+    use GoogleCloudStorageTrait;
+    
     protected $pdfProcessingService;
 
-    public function __construct(GoogleCloudStorageService $googleCloudService, PdfProcessingService $pdfProcessingService)
+    public function __construct(PdfProcessingService $pdfProcessingService)
     {
-        $this->googleCloudService = $googleCloudService;
         $this->pdfProcessingService = $pdfProcessingService;
     }
 
     /**
      * Display the main archive interface
      */
-    public function index()
+    public function index(Request $request)
     {
+        // Log activity for visiting archive main page
+        try {
+            ActivityLogService::logAdminActivity('visited', 'archive_main_page', [
+                'description' => 'Visited Archive Main Page',
+                'page_type' => 'index',
+                'section' => 'public_archive',
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ], $request);
+        } catch (\Exception $e) {
+            Log::warning('Activity logging failed for archive main page visit: ' . $e->getMessage());
+        }
+        
         $centers = ArchiveCenter::active()->orderBy('description')->get();
         $categories = ArchiveCategory::active()->orderBy('name')->get();
         
@@ -40,6 +56,22 @@ class PdfArchiveController extends Controller
      */
     public function display(Request $request)
     {
+        // Log activity for visiting archive display page
+        try {
+            ActivityLogService::logAdminActivity('visited', 'archive_public_display', [
+                'description' => 'Visited Archive Display Page (Public)',
+                'page_type' => 'display',
+                'section' => 'public_archive',
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'filters' => $request->only(['center', 'category', 'edition_name', 'title', 'start_date', 'end_date'])
+            ], $request);
+        } catch (\Exception $e) {
+            Log::warning('Activity logging failed for archive display page visit: ' . $e->getMessage());
+        }
+        
         $query = PdfArchive::active()->with(['center', 'category']);
 
         // Apply filters
@@ -116,14 +148,22 @@ class PdfArchiveController extends Controller
             $localPath = $file->store('temp', 'local');
             $fullLocalPath = storage_path('app/' . $localPath);
 
-            // Upload to Google Cloud Storage
-            $uploadResult = $this->googleCloudService->uploadFile($fullLocalPath, $cloudFilename);
-            
-            if (!$uploadResult['success']) {
+            // Upload to Google Cloud Storage using trait
+            try {
+                $downloadUrl = $this->uploadFileWithSignedUrl($fullLocalPath, $cloudFilename);
+                
+                if (!$downloadUrl) {
+                    Storage::disk('local')->delete($localPath);
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Upload failed: Unable to upload to cloud storage'
+                    ], 500);
+                }
+            } catch (\Exception $e) {
                 Storage::disk('local')->delete($localPath);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Upload failed: ' . $uploadResult['error']
+                    'message' => 'Upload failed: ' . $e->getMessage()
                 ], 500);
             }
 
@@ -135,10 +175,11 @@ class PdfArchiveController extends Controller
             
             $thumbnailCloudPath = null;
             if ($thumbnailResult['success']) {
-                // Upload thumbnail to Google Cloud
-                $thumbnailUploadResult = $this->googleCloudService->uploadThumbnail($thumbnailPath, $thumbnailFilename);
-                if ($thumbnailUploadResult['success']) {
-                    $thumbnailCloudPath = $thumbnailUploadResult['path'];
+                // Upload thumbnail to Google Cloud using trait
+                try {
+                    $thumbnailCloudPath = $this->uploadFileToCloud($thumbnailPath, $thumbnailFilename);
+                } catch (\Exception $e) {
+                    Log::warning('Thumbnail upload failed: ' . $e->getMessage());
                 }
             }
 
@@ -155,7 +196,7 @@ class PdfArchiveController extends Controller
                 'page_number' => $request->page_number,
                 'pdf_file_path' => $cloudFilename,
                 'thumbnail_path' => $thumbnailCloudPath,
-                'google_cloud_path' => $uploadResult['path'],
+                'google_cloud_path' => $downloadUrl,
                 'google_cloud_thumbnail_path' => $thumbnailCloudPath,
                 'file_size' => $fileInfo['success'] ? $fileInfo['info']['size'] : 0,
                 'file_type' => $file->getMimeType(),
@@ -212,10 +253,8 @@ class PdfArchiveController extends Controller
         $archive = PdfArchive::findOrFail($id);
         
         try {
-            // Get signed URL from Google Cloud Storage
-            $metadata = $this->googleCloudService->getFileMetadata($archive->google_cloud_path);
-            
-            if (!$metadata['success']) {
+            // Check if file exists in cloud storage
+            if (!$this->fileExists($archive->google_cloud_path)) {
                 return redirect()->back()->with('error', 'File not found or access denied');
             }
 
@@ -235,13 +274,13 @@ class PdfArchiveController extends Controller
         $archive = PdfArchive::findOrFail($id);
         
         try {
-            // Delete from Google Cloud Storage
+            // Delete from Google Cloud Storage using trait
             if ($archive->google_cloud_path) {
-                $this->googleCloudService->deleteFile($archive->google_cloud_path);
+                $this->deleteFileFromCloud($archive->google_cloud_path);
             }
             
             if ($archive->google_cloud_thumbnail_path) {
-                $this->googleCloudService->deleteFile($archive->google_cloud_thumbnail_path);
+                $this->deleteFileFromCloud($archive->google_cloud_thumbnail_path);
             }
 
             // Delete database record

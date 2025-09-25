@@ -68,6 +68,18 @@ Route::prefix('admin/archive')->name('admin.archive.')->middleware(['auth', 'rot
     // Archive Upload Routes
     Route::get('/upload', [ArchiveUploadController::class, 'showUploadForm'])->name('upload');
     Route::post('/upload', [ArchiveUploadController::class, 'upload'])->name('upload.store');
+    
+    // Test route for debugging
+Route::post('/upload-test', function() {
+    \Log::info('Test upload route called', ['input' => request()->all()]);
+    return response()->json(['success' => true, 'message' => 'Test route working']);
+})->name('upload.test');
+
+// Test route to verify upload page activity logging
+Route::get('/test-upload-logging', function() {
+    $controller = new \App\Http\Controllers\ArchiveUploadController();
+    return $controller->showUploadForm(request());
+})->name('test.upload.logging');
     Route::post('/generate-thumbnail', [ArchiveUploadController::class, 'generateThumbnail'])->name('generate-thumbnail');
     Route::post('/get-editions-upload', [ArchiveUploadController::class, 'getEditions'])->name('get-editions-upload');
     Route::post('/center-editions', [ArchiveAdminController::class, 'getCenterEditions'])->name('center-editions');

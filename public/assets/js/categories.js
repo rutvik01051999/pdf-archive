@@ -44,9 +44,121 @@ $(document).ready(function() {
         }
     });
 
+    // XSS Protection functions
+    function sanitizeInput(input) {
+        if (!input) return '';
+        
+        // Remove HTML tags
+        input = input.replace(/<[^>]*>/g, '');
+        
+        // Remove script tags and content
+        input = input.replace(/<script[^>]*>.*?<\/script>/gi, '');
+        input = input.replace(/<script[^>]*>/gi, '');
+        
+        // Remove event handlers
+        input = input.replace(/on\w+\s*=\s*["'][^"']*["']/gi, '');
+        
+        // Remove javascript: URLs
+        input = input.replace(/javascript:/gi, '');
+        
+        // Remove suspicious characters
+        input = input.replace(/[<>"'&\\/;|`$]/g, '');
+        
+        return input.trim();
+    }
+
+    function validateCategoryName(name) {
+        if (!name || name.length < 2) {
+            return { valid: false, message: 'Category name must be at least 2 characters long.' };
+        }
+        
+        if (name.length > 100) {
+            return { valid: false, message: 'Category name must not exceed 100 characters.' };
+        }
+        
+        // Check for allowed characters only
+        if (!/^[a-zA-Z0-9\s\-_.,()]+$/.test(name)) {
+            return { valid: false, message: 'Category name contains invalid characters. Only letters, numbers, spaces, hyphens, underscores, dots, commas, and parentheses are allowed.' };
+        }
+        
+        // Check for XSS patterns
+        const xssPatterns = [
+            /<script[^>]*>/i,
+            /javascript:/i,
+            /on\w+\s*=/i,
+            /<iframe[^>]*>/i,
+            /<object[^>]*>/i,
+            /<embed[^>]*>/i,
+            /<form[^>]*>/i,
+            /<input[^>]*>/i,
+            /<meta[^>]*>/i,
+            /<link[^>]*>/i,
+            /<style[^>]*>/i,
+            /expression\s*\(/i,
+            /url\s*\(/i,
+            /vbscript:/i,
+            /data:/i
+        ];
+        
+        for (const pattern of xssPatterns) {
+            if (pattern.test(name)) {
+                return { valid: false, message: 'Category name contains potentially harmful content.' };
+            }
+        }
+        
+        // Check for SQL injection patterns
+        const sqlPatterns = [
+            /union\s+select/i,
+            /drop\s+table/i,
+            /delete\s+from/i,
+            /insert\s+into/i,
+            /update\s+set/i,
+            /select\s+.*\s+from/i,
+            /or\s+1\s*=\s*1/i,
+            /and\s+1\s*=\s*1/i,
+            /'\s*or\s*'/i,
+            /'\s*and\s*'/i
+        ];
+        
+        for (const pattern of sqlPatterns) {
+            if (pattern.test(name)) {
+                return { valid: false, message: 'Category name contains potentially harmful content.' };
+            }
+        }
+        
+        return { valid: true };
+    }
+
+    function showValidationError(message) {
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: 'Validation Error',
+                text: message,
+                icon: 'error',
+                confirmButtonText: 'OK'
+            });
+        } else {
+            alert('Validation Error: ' + message);
+        }
+    }
+
     // Category management functions
     CategoryJquery = {
         AddCategory: function() {
+            // Get and validate category name
+            const categoryName = $('#category_name').val().trim();
+            
+            // Sanitize input
+            const sanitizedName = sanitizeInput(categoryName);
+            $('#category_name').val(sanitizedName);
+            
+            // Validate category name
+            const validation = validateCategoryName(sanitizedName);
+            if (!validation.valid) {
+                showValidationError(validation.message);
+                return;
+            }
+            
             $.ajax({
                 type: 'POST',
                 data: $('#defaultForm').serializeArray(),
@@ -173,12 +285,50 @@ $(document).ready(function() {
         }
     };
 
+    // Real-time input validation and sanitization
+    $('#category_name').on('input', function() {
+        const input = $(this);
+        const value = input.val();
+        const sanitized = sanitizeInput(value);
+        
+        // Update the input with sanitized value if it changed
+        if (sanitized !== value) {
+            input.val(sanitized);
+        }
+        
+        // Real-time validation feedback
+        if (sanitized.length > 0) {
+            const validation = validateCategoryName(sanitized);
+            if (!validation.valid) {
+                input.addClass('is-invalid');
+                input.removeClass('is-valid');
+                
+                // Show validation message
+                let feedback = input.siblings('.invalid-feedback');
+                if (feedback.length === 0) {
+                    feedback = $('<div class="invalid-feedback"></div>');
+                    input.after(feedback);
+                }
+                feedback.text(validation.message);
+            } else {
+                input.addClass('is-valid');
+                input.removeClass('is-invalid');
+            }
+        } else {
+            input.removeClass('is-valid is-invalid');
+        }
+    });
+
     // Event handlers
     $('#addNew').on('click', function() {
         $('#form').show();
         $('#id').val("");
         $('#dataTable').hide();
         $('input').css("border-color", "");
+        
+        // Clear validation states
+        $('#category_name').removeClass('is-valid is-invalid');
+        $('.invalid-feedback').remove();
     });
 
     $('#cancel').on('click', function() {

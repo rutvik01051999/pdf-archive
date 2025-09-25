@@ -12,5 +12,8 @@ return [
         'VIDEO' => 'junior_editor/video_image/' . date('Ymd'),
         'PROCESS_IMAGE' => 'junior_editor/process_image/' . date('Ymd'),
         'SLIDER_IMAGE' => 'junior_editor/slider_image/' . date('Ymd'),
+        'PDF_ARCHIVE' => 'PDFArchive/pdf/' . date('dmy'),
+        'PDF_THUMBNAIL' => 'PDFArchive/thumb',
+        'PDF_THUMBNAIL_LARGE' => 'PDFArchive/thumb-large',
     ],
 ];

@@ -7,7 +7,9 @@ use App\Models\User;
 use App\Models\Pdf;
 use App\Models\CategoryPdf;
 use App\Models\MatrixReportCenter;
+use App\Services\ActivityLogService;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class DashboardController extends Controller
 {
@@ -17,8 +19,23 @@ class DashboardController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
+        // Log activity for visiting dashboard
+        try {
+            ActivityLogService::logAdminActivity('visited', 'admin_dashboard', [
+                'description' => 'Visited Admin Dashboard',
+                'page_type' => 'dashboard',
+                'section' => 'admin',
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent()
+            ], $request);
+        } catch (\Exception $e) {
+            \Log::warning('Activity logging failed for dashboard visit: ' . $e->getMessage());
+        }
+        
         // Get module statistics
         $moduleStats = $this->getModuleStatistics();
         

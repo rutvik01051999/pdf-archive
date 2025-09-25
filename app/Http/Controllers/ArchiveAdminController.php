@@ -7,8 +7,11 @@ use App\Models\ArchiveCategory;
 use App\Models\ArchiveCenter;
 use App\Models\ArchiveLogin;
 use App\Models\ArchiveLoginLog;
-use App\Services\GoogleCloudStorageService;
 use App\Services\ActivityLogService;
+use App\Traits\GoogleCloudStorageTrait;
+use App\Http\Requests\ArchiveUploadRequest;
+use App\Http\Requests\CategoryRequest;
+use App\Http\Requests\SpecialDateRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -17,11 +20,23 @@ use Carbon\Carbon;
 
 class ArchiveAdminController extends Controller
 {
+    use GoogleCloudStorageTrait;
     /**
      * Show admin dashboard
      */
-    public function dashboard()
+    public function dashboard(Request $request)
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited', 'archive_dashboard', [
+            'description' => 'Visited Archive Dashboard',
+            'page_type' => 'dashboard',
+            'section' => 'archive',
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent()
+        ], $request);
+        
         $stats = [
             'total_archives' => PdfArchive::count(),
             'active_archives' => PdfArchive::active()->count(),
@@ -49,10 +64,10 @@ class ArchiveAdminController extends Controller
     /**
      * Manage archive categories
      */
-    public function categories()
+    public function categories(Request $request)
     {
         // Log page visit
-        ActivityLogService::logAdminActivity('visited categories page');
+        ActivityLogService::logAdminActivity('visited categories page', null, [], $request);
         
         // Get centers from the centers database connection
         try {
@@ -116,40 +131,37 @@ class ArchiveAdminController extends Controller
     /**
      * Store new category (matching mypdfarchive structure)
      */
-    public function storeCategory(Request $request)
+    public function storeCategory(CategoryRequest $request)
     {
-        $request->validate([
-            'category_name' => 'required|string|max:255|unique:category_pdf,category,' . ($request->id ?: 'NULL'),
-        ]);
-
-        $isUpdate = !empty($request->id);
+        $validated = $request->validated();
+        $isUpdate = !empty($validated['id']);
         $action = $isUpdate ? 'updated' : 'created';
 
-        if ($request->id == '') {
+        if (!$isUpdate) {
             // Add new category
             $insertId = DB::table('category_pdf')->insertGetId([
-                'category' => $request->category_name,
+                'category' => $validated['category_name'],
                 'active_status' => '1',
             ]);
             
             // Log category creation
             ActivityLogService::logCategoryActivity($request, 'created', [
                 'category_id' => $insertId,
-                'category_name' => $request->category_name
+                'category_name' => $validated['category_name']
             ]);
         } else {
             // Update existing category
             DB::table('category_pdf')
-                ->where('id', $request->id)
+                ->where('id', $validated['id'])
                 ->update([
-                    'category' => $request->category_name,
+                    'category' => $validated['category_name'],
                 ]);
-            $insertId = $request->id;
+            $insertId = $validated['id'];
             
             // Log category update
             ActivityLogService::logCategoryActivity($request, 'updated', [
                 'category_id' => $insertId,
-                'category_name' => $request->category_name
+                'category_name' => $validated['category_name']
             ]);
         }
 
@@ -218,10 +230,10 @@ class ArchiveAdminController extends Controller
     /**
      * Manage centers
      */
-    public function centers()
+    public function centers(Request $request)
     {
         // Log page visit
-        ActivityLogService::logAdminActivity('visited centers page');
+        ActivityLogService::logAdminActivity('visited centers page', null, [], $request);
         
         $centers = ArchiveCenter::orderBy('description')->get();
         
@@ -321,10 +333,10 @@ class ArchiveAdminController extends Controller
     /**
      * Manage users
      */
-    public function users()
+    public function users(Request $request)
     {
         // Log page visit
-        ActivityLogService::logAdminActivity('visited users page');
+        ActivityLogService::logAdminActivity('visited users page', null, [], $request);
         
         $users = ArchiveLogin::with('center')->orderBy('uname')->get();
         $centers = ArchiveCenter::active()->orderBy('description')->get();
@@ -366,7 +378,7 @@ class ArchiveAdminController extends Controller
     public function loginLogs(Request $request)
     {
         // Log page visit
-        ActivityLogService::logAdminActivity('visited login logs page');
+        ActivityLogService::logAdminActivity('visited login logs page', null, [], $request);
         
         $query = ArchiveLoginLog::with(['login', 'center']);
 
@@ -397,6 +409,9 @@ class ArchiveAdminController extends Controller
      */
     public function archives(Request $request)
     {
+        // Log page visit
+        ActivityLogService::logAdminActivity('visited archives management page', null, [], $request);
+        
         $query = PdfArchive::with(['center', 'category']);
 
         // Apply filters
@@ -494,19 +509,19 @@ class ArchiveAdminController extends Controller
     /**
      * Special Dates Management
      */
-    public function specialDates()
+    public function specialDates(Request $request)
     {
         // Log page visit
-        ActivityLogService::logAdminActivity('visited special dates page');
+        ActivityLogService::logAdminActivity('visited special dates page', null, [], $request);
         
         return view('archive.admin.special-dates');
     }
 
-    public function upload()
+    public function upload(Request $request)
     {
         try {
             // Log page visit
-            ActivityLogService::logAdminActivity('visited upload page');
+            ActivityLogService::logAdminActivity('visited upload page', null, [], $request);
             
             // Get categories for dropdown
             $categories = DB::table('category_pdf')
@@ -579,55 +594,47 @@ class ArchiveAdminController extends Controller
         }
     }
 
-    public function storeUpload(Request $request)
+    public function storeUpload(ArchiveUploadRequest $request)
     {
         try {
             $response = 'fail';
             
-            $is_matrix_edition = $request->input('is_matrix_edition', '');
-            $category = $request->input('category', '');
-            $center = $request->input('center', '');
+            // Get validated data from request
+            $category = $request->validated()['category'];
+            $center = $request->validated()['published_center'];
             $auto = 0;
-            $edition = '';
             $edition_code = 0;
-            $edition_name = '';
+            $edition_name = $request->validated()['edition_name'] ?? '';
 
             // Handle Matrix Auto category
             if ($category == "Matrix Auto") {
                 $auto = 1;
                 $edition = $request->input('ename', '');
+                $is_matrix_edition = 1;
                 if (!empty($edition)) {
                     $enamearray = explode("~", $edition);
                     $edition_code = $enamearray[0];
                     $edition_name = $enamearray[1];
                 }
-            } else {
-                $edition_name = $request->input('txt_ename', '');
             }
 
-            $pno = $request->input('pno', 0);
-            $title = $request->input('title', '');
-            $event = $request->input('event', '');
-            $pdate = $request->input('pdate', '');
+            $pno = $request->validated()['edition_pageno'] ?? 1;
+            $title = $request->validated()['title'];
+            $event = $request->validated()['event'] ?? '';
+            $pdate = $request->validated()['published_date'];
             
-            // Convert date format from dd/mm/yyyy to yyyy-mm-dd
+            // Date is already in Y-m-d format from validation
             if (!empty($pdate)) {
-                $pdate = \DateTime::createFromFormat('d/m/Y', $pdate);
-                if ($pdate) {
-                    $pdate = $pdate->format('Y-m-d');
-                } else {
-                    throw new \Exception('Invalid date format');
-                }
+                // Ensure date is properly formatted
+                $pdate = date('Y-m-d', strtotime($pdate));
             }
 
             $userid = auth()->user()?->username ?? 'admin';
 
-            // Get uploaded files
-            $files = $request->file('files', []);
+            // Get uploaded PDF file (single file)
+            $file = $request->file('pdf_file');
 
-            if (!empty($files)) {
-                foreach ($files as $file) {
-                    if ($file->isValid()) {
+            if ($file && $file->isValid()) {
                         // Process file name for Matrix Auto category
                         if ($is_matrix_edition == 1 && $category == "Matrix Auto") {
                             // File name parsing logic from mypdfarchive
@@ -681,11 +688,13 @@ class ArchiveAdminController extends Controller
                             $storagePath .= $edition_name . "/";
                         }
                         
-                        // Store the file
-                        $filePath = $file->storeAs($storagePath, $originalFilename, 'public');
+                        // Upload to cloud storage using trait (with fallback)
+                        $tempPath = $file->getRealPath();
+                        $cloudPath = $storagePath . $originalFilename;
+                        $downloadUrl = $this->uploadFileWithSignedUrl($tempPath, $cloudPath);
                         
-                        // Generate download URL
-                        $downloadUrl = asset('storage/' . $filePath);
+                        // For database storage, use cloud path
+                        $filePath = $cloudPath;
                         
                         // Check if record already exists
                         $existingRecord = DB::table('pdf')
@@ -695,53 +704,51 @@ class ArchiveAdminController extends Controller
                             ->where('auto', $auto)
                             ->first();
 
-                        if (!$existingRecord) {
-                            // Insert new record
-                            $insertId = DB::table('pdf')->insertGetId([
-                                'filename' => $originalFilename,
-                                'filepath' => $filePath,
-                                'download_url' => $downloadUrl,
-                                'title' => $title,
-                                'category' => $category,
-                                'event' => $event,
-                                'edition_name' => $edition_name,
-                                'edition_code' => $edition_code,
-                                'edition_pageno' => $pno,
-                                'published_date' => $pdate,
-                                'published_center' => $center,
-                                'upload_date' => now(),
-                                'username' => $userid,
-                                'auto' => $auto
-                            ]);
+                if (!$existingRecord) {
+                    // Insert new record
+                    $insertId = DB::table('pdf')->insertGetId([
+                        'filename' => $originalFilename,
+                        'filepath' => $filePath,
+                        'download_url' => $downloadUrl,
+                        'title' => $title,
+                        'category' => $category,
+                        'event' => $event,
+                        'edition_name' => $edition_name,
+                        'edition_code' => $edition_code,
+                        'edition_pageno' => $pno,
+                        'published_date' => $pdate,
+                        'published_center' => $center,
+                        'upload_date' => now(),
+                        'username' => $userid,
+                        'auto' => $auto
+                    ]);
 
-                            if ($insertId) {
-                                // Log archive upload
-                                ActivityLogService::logArchiveUpload($request, [
-                                    'archive_id' => $insertId,
-                                    'filename' => $originalFilename,
-                                    'category' => $category,
-                                    'center' => $center,
-                                    'edition_name' => $edition_name,
-                                    'published_date' => $pdate
-                                ]);
-                                $response = 'success';
-                            }
-                        } else {
-                            // Update existing record
-                            DB::table('pdf')
-                                ->where('id', $existingRecord->id)
-                                ->update([
-                                    'filepath' => $filePath,
-                                    'download_url' => $downloadUrl,
-                                    'edition_name' => $edition_name,
-                                    'edition_code' => $edition_code,
-                                    'edition_pageno' => $pno,
-                                    'upload_date' => now(),
-                                    'username' => $userid
-                                ]);
-                            $response = 'success';
-                        }
+                    if ($insertId) {
+                        // Log archive upload
+                        ActivityLogService::logArchiveUpload($request, [
+                            'archive_id' => $insertId,
+                            'filename' => $originalFilename,
+                            'category' => $category,
+                            'center' => $center,
+                            'edition_name' => $edition_name,
+                            'published_date' => $pdate
+                        ]);
+                        $response = 'success';
                     }
+                } else {
+                    // Update existing record
+                    DB::table('pdf')
+                        ->where('id', $existingRecord->id)
+                        ->update([
+                            'filepath' => $filePath,
+                            'download_url' => $downloadUrl,
+                            'edition_name' => $edition_name,
+                            'edition_code' => $edition_code,
+                            'edition_pageno' => $pno,
+                            'upload_date' => now(),
+                            'username' => $userid
+                        ]);
+                    $response = 'success';
                 }
             }
 
@@ -752,10 +759,18 @@ class ArchiveAdminController extends Controller
         }
     }
 
-    public function display()
+    public function display(Request $request)
     {
         // Log page visit
-        ActivityLogService::logAdminActivity('visited archive display page');
+        ActivityLogService::logAdminActivity('visited', 'archive_display_page', [
+            'description' => 'Visited Archive Display Page',
+            'page_type' => 'display',
+            'section' => 'archive',
+            'url' => $request->fullUrl(),
+            'method' => $request->method(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent()
+        ], $request);
         
         // Get centers from the centers database connection (same as mypdfarchive)
         try {
@@ -895,7 +910,7 @@ class ArchiveAdminController extends Controller
                     $str_tab_div_html = '';
                 
                 foreach ($editionArchives as $archive) {
-                    $thumbnailPath = $this->generateThumbnailPath($archive);
+                    $thumbnailPath = $this->getArchiveThumbnailPath($archive);
                     $isNew = $this->isNewArchive($archive->filename);
                     $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
                 }
@@ -945,7 +960,7 @@ class ArchiveAdminController extends Controller
                             $str_tab_div_html = '';
                             
                             foreach ($editionArchives as $archive) {
-                                $thumbnailPath = $this->generateThumbnailPath($archive);
+                                $thumbnailPath = $this->getArchiveThumbnailPath($archive);
                                 $isNew = $this->isNewArchive($archive->filename);
                                 
                                 $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
@@ -974,7 +989,7 @@ class ArchiveAdminController extends Controller
                 
                 if ($otherArchives->count() > 0) {
                     foreach ($otherArchives as $archive) {
-                        $thumbnailPath = $this->generateThumbnailPath($archive);
+                        $thumbnailPath = $this->getArchiveThumbnailPath($archive);
                         $isNew = $this->isNewArchive($archive->filename);
                         $str_tab_div_html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
                     }
@@ -1008,7 +1023,7 @@ class ArchiveAdminController extends Controller
             // Generate HTML for regular search results
             $html = '<div class="row">';
             foreach ($archives as $archive) {
-                $thumbnailPath = $this->generateThumbnailPath($archive);
+                        $thumbnailPath = $this->getArchiveThumbnailPath($archive);
                 $isNew = $this->isNewArchive($archive->filename);
                 $html .= $this->generateArchiveCardHtml($archive, $thumbnailPath, $isNew);
             }
@@ -1108,7 +1123,7 @@ class ArchiveAdminController extends Controller
                 'ccode' => $ccode,
                 'edition_code' => $edition_code,
                 'pageno' => $pageno,
-                'user_id' => auth()->id() ?? 1,
+                'user_id' => auth()->user()?->id ?? 1,
                 'created_at' => now()
             ]);
 
@@ -1156,11 +1171,10 @@ class ArchiveAdminController extends Controller
         }
     }
 
-    public function generateThumbnailPath($archive)
+    public function getArchiveThumbnailPath($archive)
     {
         if ($archive->filepath) {
-            $storageService = new GoogleCloudStorageService();
-            $thumbnailPath = $storageService->generateThumbnailPath($archive->filepath, $archive->auto == '1');
+            $thumbnailPath = $this->generateThumbnailPath($archive->filepath, $archive->auto == '1');
             
             if ($thumbnailPath) {
                 return $thumbnailPath;
@@ -1210,11 +1224,10 @@ class ArchiveAdminController extends Controller
         }
     }
 
-    private function generatePdfUrl($archive)
+    private function getArchivePdfUrl($archive)
     {
         if ($archive->filepath) {
-            $storageService = new GoogleCloudStorageService();
-            $pdfUrl = $storageService->generatePdfUrl($archive->filepath);
+            $pdfUrl = $this->generatePdfUrl($archive->filepath);
             
             if ($pdfUrl) {
                 return $pdfUrl;
@@ -1225,11 +1238,10 @@ class ArchiveAdminController extends Controller
         return $archive->filepath ?? '#';
     }
 
-    private function generateLargeThumbnailPath($archive)
+    private function getArchiveLargeThumbnailPath($archive)
     {
         if ($archive->filepath) {
-            $storageService = new GoogleCloudStorageService();
-            $largeThumbnailPath = $storageService->generateLargeThumbnailPath($archive->filepath, $archive->auto == '1');
+            $largeThumbnailPath = $this->generateLargeThumbnailPath($archive->filepath, $archive->auto == '1');
             
             if ($largeThumbnailPath) {
                 return $largeThumbnailPath;
@@ -1287,34 +1299,30 @@ class ArchiveAdminController extends Controller
     /**
      * Store new special date
      */
-    public function storeSpecialDate(Request $request)
+    public function storeSpecialDate(SpecialDateRequest $request)
     {
-        $request->validate([
-            'special_date' => 'required|string|max:20',
-            'description' => 'required|string|max:255',
-        ]);
-
-        $isUpdate = !empty($request->id);
+        $validated = $request->validated();
+        $isUpdate = !empty($validated['id']);
         $action = $isUpdate ? 'updated' : 'created';
 
-        if ($request->id == '') {
+        if (!$isUpdate) {
             // Add new special date
             $insertId = DB::table('special_dates')->insertGetId([
-                'special_date' => $request->special_date,
-                'description' => $request->description,
+                'special_date' => $validated['special_date'],
+                'description' => $validated['description'],
                 'active_status' => '1',
             ]);
             
             // Log special date creation
             ActivityLogService::logSpecialDatesActivity($request, 'created', [
                 'special_date_id' => $insertId,
-                'special_date' => $request->special_date,
-                'description' => $request->description
+                'special_date' => $validated['special_date'],
+                'description' => $validated['description']
             ]);
         } else {
             // Update existing special date
             DB::table('special_dates')
-                ->where('id', $request->id)
+                ->where('id', $validated['id'])
                 ->update([
                     'special_date' => $request->special_date,
                     'description' => $request->description,
@@ -1324,8 +1332,8 @@ class ArchiveAdminController extends Controller
             // Log special date update
             ActivityLogService::logSpecialDatesActivity($request, 'updated', [
                 'special_date_id' => $insertId,
-                'special_date' => $request->special_date,
-                'description' => $request->description
+                'special_date' => $validated['special_date'],
+                'description' => $validated['description']
             ]);
         }
 
@@ -1439,7 +1447,7 @@ class ArchiveAdminController extends Controller
         $html .= '<a href="'.route('admin.archive.edit', $archive->id).'" target="_blank" class="btn btn-icon" title="Edit"><i class="bx bx-edit"></i></a>';
         $html .= '<button class="btn btn-icon" onclick="confirmation('.$archive->id.')" title="Delete"><i class="bx bx-trash"></i></button>';
         $html .= '<a href="'.route('admin.archive.copy', $archive->id).'" target="_blank" class="btn btn-icon" title="Copy"><i class="bx bx-copy"></i></a>';
-        $pdfUrl = $this->generatePdfUrl($archive);
+        $pdfUrl = $this->getArchivePdfUrl($archive);
         $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Download" onclick="download_log(\''.(auth()->user()?->username ?? 'admin').'\',\''.$archive->download_url.'\',\''.$archive->published_date.'\',\''.(auth()->user()?->username ?? 'admin').'\',\''.$archive->edition_code.'\',\''.$archive->edition_pageno.'\')"><i class="bx bx-download"></i></a>';
         $html .= '<a href="'.$pdfUrl.'" target="_blank" class="btn btn-icon" title="Print"><i class="bx bx-printer"></i></a>';
         $html .= '</div>';
@@ -1452,13 +1460,13 @@ class ArchiveAdminController extends Controller
     /**
      * Show the form for editing an archive
      */
-    public function edit($id)
+    public function edit($id, Request $request)
     {
         try {
             // Log page visit
             ActivityLogService::logAdminActivity('visited archive edit page', null, [
                 'archive_id' => $id
-            ]);
+            ], $request);
             
             $archive = DB::table('pdf')->where('id', $id)->first();
             
@@ -1563,13 +1571,13 @@ class ArchiveAdminController extends Controller
         }
     }
 
-    public function copy($id)
+    public function copy($id, Request $request)
     {
         try {
             // Log page visit
             ActivityLogService::logAdminActivity('visited archive copy page', null, [
                 'archive_id' => $id
-            ]);
+            ], $request);
             
             $archive = DB::table('pdf')->where('id', $id)->first();
             

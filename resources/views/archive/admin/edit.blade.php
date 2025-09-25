@@ -20,7 +20,7 @@
                     <i class="bx bx-edit me-2"></i>
                     Edit Archive
                 </div>
-                <div class="card-tools">
+                <div class="card-tools" style="margin-left: auto;">
                     <a href="{{ route('admin.archive.display') }}" class="btn btn-sm btn-outline-secondary">
                         <i class="bx bx-arrow-back me-1"></i>
                         Back to Archives
@@ -40,7 +40,7 @@
                                 <label class="form-label"><strong>PDF Thumb:</strong></label>
                                 <div class="border p-2 text-center" style="min-height: 250px; display: flex; align-items: center; justify-content: center;">
                                     @php
-                                        $thumbnailPath = (new App\Http\Controllers\ArchiveAdminController())->generateThumbnailPath($archive);
+                                        $thumbnailPath = (new App\Http\Controllers\ArchiveAdminController())->getArchiveThumbnailPath($archive);
                                     @endphp
                                     <img src="{{ $thumbnailPath }}" class="img-fluid" alt="PDF Thumbnail" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjQwMCIgdmlld0JveD0iMCAwIDMwMCA0MDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMDAiIGhlaWdodD0iNDAwIiBmaWxsPSIjRjVGNUY1Ii8+CjxwYXRoIGQ9Ik0yMjUgMTEyLjVIMTg3LjVWNzVIMjI1VjExMi41WiIgZmlsbD0iI0Q5RDlEOSIvPgo8cGF0aCBkPSJNMjI1IDExMi41SDE4Ny41Vjc1IiBzdHJva2U9IiNDQ0NDQ0MiIHN0cm9rZS13aWR0aD0iMyIvPgo8dGV4dCB4PSIxNTAiIHk9IjE5NSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjIxIj5GaWxlPC90ZXh0Pgo8dGV4dCB4PSIxNTAiIHk9IjIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4Ij5Ob3QgYXZhaWxhYmxlPC90ZXh0Pgo8L3N2Zz4K';" style="max-height: 250px; object-fit: contain;">
                                 </div>

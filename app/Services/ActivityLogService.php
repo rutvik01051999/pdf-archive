@@ -12,7 +12,7 @@ class ActivityLogService
     /**
      * Log admin activity
      */
-    public static function logAdminActivity(string $action, $subject = null, array $properties = [])
+    public static function logAdminActivity(string $action, $subject = null, array $properties = [], Request $request = null)
     {
         $user = Auth::user();
         
@@ -20,17 +20,46 @@ class ActivityLogService
             return;
         }
 
-        $log = activity()
-            ->causedBy($user)
-            ->withProperties(array_merge($properties, [
-                'type' => 'admin_activity',
-                'admin_user_id' => $user->id,
-                'admin_user_name' => $user->admin_full_name ?: $user->username,
-                'source' => 'admin'
-            ]));
+        // Get request details if not provided
+        if (!$request) {
+            $request = request();
+        }
 
+        // Prepare base properties
+        $baseProperties = array_merge($properties, [
+            'type' => 'admin_activity',
+            'admin_user_id' => $user->id,
+            'admin_user_name' => $user->admin_full_name ?: $user->username,
+            'source' => 'admin',
+            'url' => $request ? $request->fullUrl() : null,
+            'method' => $request ? $request->method() : null,
+            'ip' => $request ? $request->ip() : null,
+            'user_agent' => $request ? $request->userAgent() : null,
+            'timestamp' => now()->toDateTimeString(),
+            'action_type' => 'page_visit'
+        ]);
+
+        // Add subject information if provided
         if ($subject) {
-            $log->performedOn($subject);
+            if ($subject instanceof \Illuminate\Database\Eloquent\Model) {
+                // For Eloquent models, we'll use performedOn()
+                $log = activity()
+                    ->causedBy($user)
+                    ->withProperties($baseProperties)
+                    ->performedOn($subject);
+            } else {
+                // For string subjects, add to properties
+                $baseProperties['subject_type'] = 'string';
+                $baseProperties['subject_value'] = $subject;
+                
+                $log = activity()
+                    ->causedBy($user)
+                    ->withProperties($baseProperties);
+            }
+        } else {
+            $log = activity()
+                ->causedBy($user)
+                ->withProperties($baseProperties);
         }
 
         $log->log($action);
