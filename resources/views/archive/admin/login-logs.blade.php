@@ -95,3 +95,8 @@
 </div>
 @endsection
 
+@push('scripts')
+<!-- Login Logs JavaScript -->
+<script src="{{ asset('assets/js/login-logs.js') }}"></script>
+@endpush
+

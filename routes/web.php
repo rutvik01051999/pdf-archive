@@ -5,6 +5,7 @@ use App\Http\Controllers\PdfArchiveController;
 use App\Http\Controllers\ArchiveAuthController;
 use App\Http\Controllers\ArchiveAdminController;
 use App\Http\Controllers\ArchiveUploadController;
+use App\Http\Controllers\ActivityLogsController;
 use App\Http\Middleware\SetLocale;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -108,12 +109,14 @@ Route::prefix('admin/archive')->name('admin.archive.')->middleware(['auth', 'rot
     Route::get('/statistics', [ArchiveAdminController::class, 'getStatistics'])->name('statistics');
 });
 
+// Activity Logs Routes
+Route::prefix('admin/activities')->name('admin.activities.')->middleware(['auth', 'rotate.session', 'inactive.admin.logout'])->group(function () {
+    Route::get('activity-logs', [ActivityLogsController::class, 'index'])->name('activity-logs.index');
+    Route::get('activity-logs/{id}/details', [ActivityLogsController::class, 'details'])->name('activity-logs.details');
+});
+
 Route::middleware(SetLocale::class)->group(function () {
     Route::prefix('admin/dashboard')->name('admin.dashboard.')->middleware(['auth', 'rotate.session', 'inactive.admin.logout'])->group(function () {
-        Route::get('/', [DashboardController::class, 'index'])->name('index');
+        Route::get('/', [ArchiveAdminController::class, 'display'])->name('index');
     });
-    
-
-
-
 });

@@ -85,6 +85,17 @@
                 </ul>
             </li>
 
+            <!-- Activity Logs Section -->
+            <li class="slide {{ request()->routeIs('admin.activities.*') ? 'active' : '' }}">
+                <a href="{{ route('admin.activities.activity-logs.index') }}"
+                    class="side-menu__item {{ request()->routeIs('admin.activities.*') ? 'active' : '' }}">
+                    <i class="bx bx-history side-menu__icon"></i>
+                    <span class="side-menu__label">
+                        Activity Logs
+                    </span>
+                </a>
+            </li>
+
                                 </ul>
 
                                 <div class="slide-right d-none" id="slide-right">

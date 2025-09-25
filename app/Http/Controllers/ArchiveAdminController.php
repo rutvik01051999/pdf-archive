@@ -8,6 +8,7 @@ use App\Models\ArchiveCenter;
 use App\Models\ArchiveLogin;
 use App\Models\ArchiveLoginLog;
 use App\Services\GoogleCloudStorageService;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -700,6 +701,17 @@ class ArchiveAdminController extends Controller
             $enddate = $request->input('enddate', '');
             $edition_code = $request->input('edition_code', ''); // Tab functionality
             $page = $request->input('page', 0); // New pagination parameter
+            
+            // Log search activity
+            ActivityLogService::logArchiveSearch($request, [
+                'center' => $center,
+                'category' => $category,
+                'pno' => $pno,
+                'startdate' => $startdate,
+                'enddate' => $enddate,
+                'edition_code' => $edition_code,
+                'page' => $page
+            ]);
             $perPage = $request->input('per_page', 18); // Records per page
             // Convert date format from yyyy/mm/dd to yyyy-mm-dd (same as mypdfarchive)
             if (!empty($startdate)) {
@@ -1397,6 +1409,9 @@ class ArchiveAdminController extends Controller
                 ->update($updateData);
             
             if ($result) {
+                // Log edit activity
+                ActivityLogService::logArchiveEdit($request, $id, $updateData);
+                
                 return redirect()->route('admin.archive.display')
                     ->with('success', 'Archive updated successfully.');
             } else {

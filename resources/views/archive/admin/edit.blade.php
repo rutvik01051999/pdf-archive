@@ -142,8 +142,15 @@
 <!-- Flatpickr CSS (already included in layout) -->
 <!-- Flatpickr JS -->
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
+<!-- Edit JavaScript -->
+<script src="{{ asset('assets/js/edit.js') }}"></script>
 <script>
+// Set up URLs for the edit functionality
+window.generateThumbUrl = '{{ route("admin.archive.generate-thumb") }}';
+window.getEditionsUrl = '{{ route("admin.archive.get-editions") }}';
+</script>
+<script>
+// Additional edit page functionality
 $(document).ready(function() {
     // Date picker using native Flatpickr API
     flatpickr("#pdate", {
@@ -159,7 +166,7 @@ $(document).ready(function() {
         $.ajax({
             type:'POST',
             data:{ 'center_id': center_id },
-            url:'{{ route("admin.archive.get-editions") }}',
+            url: window.getEditionsUrl || '/admin/archive/get-editions',
             headers: {
                 'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
             },
@@ -201,59 +208,6 @@ $(document).ready(function() {
             }
             $("#title").val(str_val);
         }
-    });
-
-    // Generate thumb handler
-    $("#generate_thumb").on('click', function (e) {
-        var id = $("#id").val();
-        $.ajax({
-            type: 'post',
-            url: '{{ route("admin.archive.generate-thumb") }}',
-            data:{ 'id': id },
-            headers: {
-                'X-CSRF-TOKEN': $('meta[name="csrf-token"]').attr('content')
-            },
-            async:false,
-            beforeSend: function(){
-                $("#generate_thumb").prop('disabled', true);
-            },
-            success: function (response) {
-                console.log(response);
-                if(response.success){
-                    alert('Thumbnail generated successfully.');
-                }else{
-                    alert(response.message || 'Something went wrong.');
-                }
-                $("#generate_thumb").prop('disabled', false);
-            },
-            error: function (response) {
-                alert('Something went wrong.');
-                $("#generate_thumb").prop('disabled', false);
-            }
-        });
-    });
-
-    // Form validation
-    $('#edit-form').on('submit', function(e) {
-        var isValid = true;
-        
-        // Check required fields
-        if ($('#category').val() === '') {
-            $('#category').addClass('is-invalid');
-            isValid = false;
-        } else {
-            $('#category').removeClass('is-invalid');
-        }
-        
-        if (!isValid) {
-            e.preventDefault();
-            alert('Please fill in all required fields.');
-        }
-    });
-    
-    // Remove validation classes on change
-    $('.form-control, .form-select').on('change', function() {
-        $(this).removeClass('is-invalid');
     });
 });
 </script>

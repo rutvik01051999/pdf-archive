@@ -185,3 +185,8 @@
     }
 </style>
 @endpush
+
+@push('scripts')
+<!-- Copy JavaScript -->
+<script src="{{ asset('assets/js/copy.js') }}"></script>
+@endpush

@@ -67,39 +67,7 @@
 @endsection
 
 @push('scripts')
-<script>
-function toggleUserStatus(userId, newStatus) {
-    $.ajax({
-        url: `/admin/archive/users/${userId}/status`,
-        type: 'PUT',
-        data: { status: newStatus },
-        success: function(response) {
-            if (response.success) {
-                showAlert('success', 'User status updated successfully!');
-                location.reload();
-            } else {
-                showAlert('danger', response.message || 'Failed to update user status');
-            }
-        },
-        error: function(xhr) {
-            showAlert('danger', 'Failed to update user status');
-        }
-    });
-}
-
-function showAlert(type, message) {
-    const alertHtml = `
-        <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    `;
-    $('.container-fluid').prepend(alertHtml);
-    
-    setTimeout(function() {
-        $('.alert').alert('close');
-    }, 5000);
-}
-</script>
+<!-- Users JavaScript -->
+<script src="{{ asset('assets/js/users.js') }}"></script>
 @endpush
 

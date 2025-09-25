@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\GoogleCloudStorageService;
+use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -116,6 +117,9 @@ class ArchiveUploadController extends Controller
             
             // Save to database
             $archiveId = DB::table('pdf')->insertGetId($archiveData);
+            
+            // Log upload activity
+            ActivityLogService::logArchiveUpload($request, $archiveData);
             
             return redirect()->route('admin.archive.display')
                 ->with('success', 'PDF uploaded successfully to Google Cloud Storage!');
