@@ -228,10 +228,11 @@ $(document).ready(function(){
         loadArchives(0);
     });
 
-    // Pagination handlers
+    // Pagination handlers with activity tracking
     $('.PreviousPagination').click(function(){
         if(currentPage > 0) {
             currentPage--;
+            // Track pagination activity in the AJAX call
             loadArchives(currentPage);
         }
     });
@@ -239,17 +240,19 @@ $(document).ready(function(){
     $('.NextPagination').click(function(){
         if(currentPage < totalPages - 1) {
             currentPage++;
+            // Track pagination activity in the AJAX call
             loadArchives(currentPage);
         }
     });
 
 
-    // Reset filters
+    // Reset filters with activity tracking
     $('#resetFilters').click(function() {
         $('#archiveSearchForm')[0].reset();
         $('#startdate').val(''); // Clear start date
         $('#enddate').val(''); // Clear end date
         currentPage = 0;
+        // Reset operation will be tracked in loadArchives
         loadArchives(0);
     });
 

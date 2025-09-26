@@ -766,11 +766,19 @@ class ArchiveAdminController extends Controller
             'description' => 'Visited Archive Display Page',
             'page_type' => 'display',
             'section' => 'archive',
+            'page_visit_type' => 'display_main',
             'url' => $request->fullUrl(),
             'method' => $request->method(),
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent()
         ], $request);
+
+        // Also log detailed page visit for this specific section
+        ActivityLogService::logArchivePageVisit($request, 'archive_display_main', [
+            'page_context' => 'main_archive_display',
+            'initial_load' => true,
+            'query_params' => $request->all()
+        ]);
         
         // Get centers from the centers database connection (same as mypdfarchive)
         try {
@@ -806,8 +814,8 @@ class ArchiveAdminController extends Controller
             $edition_code = $request->input('edition_code', ''); // Tab functionality
             $page = $request->input('page', 0); // New pagination parameter
             
-            // Log search activity
-            ActivityLogService::logArchiveSearch($request, [
+            // Detect action type for appropriate logging
+            $actionParams = [
                 'center' => $center,
                 'category' => $category,
                 'pno' => $pno,
@@ -815,7 +823,36 @@ class ArchiveAdminController extends Controller
                 'enddate' => $enddate,
                 'edition_code' => $edition_code,
                 'page' => $page
-            ]);
+            ];
+            
+            // Determine what type of action this is and log accordingly
+            if (!empty($edition_code)) {
+                // This is edition tab navigation
+                ActivityLogService::logArchiveTabNavigation($request, [
+                    'edition_code' => $edition_code,
+                    'center_id' => $center,
+                    'search_criteria' => array_filter($actionParams, function($value, $key) {
+                        return in_array($key, ['center', 'category', 'startdate', 'enddate']) && !empty($value);
+                    }, ARRAY_FILTER_USE_BOTH),
+                ]);
+            } elseif ($page > 0) {
+                // This is pagination activity
+                ActivityLogService::logArchivePagination($request, [
+                    'page_number' => $page,
+                    'per_page' => $request->input('per_page', 18),
+                    'search_criteria' => array_filter($actionParams, function($value, $key) {
+                        return in_array($key, ['center', 'category', 'startdate', 'enddate']) && !empty($value);
+                    }, ARRAY_FILTER_USE_BOTH),
+                    'pagination_direction' => $page > 0 ? 'next' : 'previous'
+                ]);
+            } elseif (!empty($center) || !empty($category) || !empty($startdate) || !empty($enddate)) {
+                // This is a search/filter application
+                ActivityLogService::logArchiveFilter($request, array_filter($actionParams, fn($value, $key) => !empty($value) && !in_array($key, ['page']), ARRAY_FILTER_USE_BOTH));
+            }
+            
+            // Always log basic search activity 
+            ActivityLogService::logArchiveSearch($request, $actionParams);
+            
             $perPage = $request->input('per_page', 18); // Records per page
             // Convert date format from yyyy/mm/dd to yyyy-mm-dd (same as mypdfarchive)
             if (!empty($startdate)) {

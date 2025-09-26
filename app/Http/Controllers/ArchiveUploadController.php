@@ -48,18 +48,17 @@ class ArchiveUploadController extends Controller
                 
             Log::info('Categories loaded', ['count' => $categories->count()]);
             
-            // Get centers from the centers database connection (same as display form)
+            // Get centers from the local database (since we're using local database for uploads)
             try {
-                $centers = DB::connection('centers')
-                    ->table('matrix_report_centers')
+                $centers = DB::table('matrix_report_centers')
                     ->select('centercode', 'description')
                     ->groupBy('centercode')
                     ->orderBy('description')
                     ->get();
                     
-                Log::info('Centers loaded', ['count' => $centers->count()]);
+                Log::info('Centers loaded from local database', ['count' => $centers->count()]);
             } catch (\Exception $e) {
-                Log::error('Failed to fetch centers from centers database: ' . $e->getMessage());
+                Log::error('Failed to fetch centers from local database: ' . $e->getMessage());
                 $centers = collect();
             }
             
@@ -391,13 +390,16 @@ class ArchiveUploadController extends Controller
                 Log::warning('Activity logging failed for editions request: ' . $logError->getMessage());
             }
             
-            // Connect to matrix database for editions
-            $matrixConnection = DB::connection('matrix');
-            $editions = $matrixConnection->table('editions')
-                ->where('centercode', $centerId)
-                ->where('active_status', 1)
-                ->orderBy('description')
-                ->get();
+            // Since we're using local database, return empty editions
+            // The matrix database connection is not configured for local uploads
+            $editions = collect();
+            
+            // Log that we're using local database mode
+            Log::info('Using local database mode - editions not available', [
+                'center_id' => $centerId,
+                'user_id' => auth()->user()?->id,
+                'username' => auth()->user()?->username
+            ]);
             
             // Log successful editions retrieval
             try {

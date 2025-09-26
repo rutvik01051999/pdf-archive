@@ -32,14 +32,32 @@ $(document).ready(function() {
             success: function (response) {
                 console.log(response);
                 if(response.success){
-                    alert('Thumbnail generated successfully.');
+                    Swal.fire({
+                        title: 'Success!',
+                        text: 'Thumbnail generated successfully.',
+                        icon: 'success',
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#3085d6'
+                    });
                 }else{
-                    alert(response.message || 'Something went wrong.');
+                    Swal.fire({
+                        title: 'Warning!',
+                        text: response.message || 'Something went wrong.',
+                        icon: 'warning',
+                        confirmButtonText: 'OK',
+                        confirmButtonColor: '#d33'
+                    });
                 }
                 $("#generate_thumb").prop('disabled', false);
             },
             error: function (response) {
-                alert('Something went wrong.');
+                Swal.fire({
+                    title: 'Error!',
+                    text: 'Something went wrong while generating thumbnail.',
+                    icon: 'error',
+                    confirmButtonText: 'OK',
+                    confirmButtonColor: '#d33'
+                });
                 $("#generate_thumb").prop('disabled', false);
             }
         });
@@ -59,7 +77,13 @@ $(document).ready(function() {
         
         if (!isValid) {
             e.preventDefault();
-            alert('Please fill in all required fields.');
+            Swal.fire({
+                title: 'Validation Error!',
+                text: 'Please fill in all required fields.',
+                icon: 'error',
+                confirmButtonText: 'OK',
+                confirmButtonColor: '#d33'
+            });
         }
     });
     

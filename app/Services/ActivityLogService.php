@@ -157,6 +157,95 @@ class ActivityLogService
     }
 
     /**
+     * Log archive filter activity
+     */
+    public static function logArchiveFilter(Request $request, array $filterParams = [])
+    {
+        $user = Auth::user();
+        
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'filter_params' => $filterParams,
+                'type' => 'archive_filter',
+                'action_type' => 'filter_applied',
+                'source' => 'admin'
+            ])
+            ->log("Archive filters applied");
+    }
+
+    /**
+     * Log archive pagination activity
+     */
+    public static function logArchivePagination(Request $request, array $paginationParams = [])
+    {
+        $user = Auth::user();
+        
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'pagination_params' => $paginationParams,
+                'type' => 'archive_pagination',
+                'action_type' => 'page_change',
+                'source' => 'admin'
+            ])
+            ->log("Archive pagination accessed");
+    }
+
+    /**
+     * Log archive edition tab navigation activity
+     */
+    public static function logArchiveTabNavigation(Request $request, array $tabParams = [])
+    {
+        $user = Auth::user();
+        
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'tab_params' => $tabParams,
+                'type' => 'archive_tab_navigation',
+                'action_type' => 'edition_tab_change',
+                'source' => 'admin'
+            ])
+            ->log("Archive edition tab navigation");
+    }
+
+    /**
+     * Log archive page visit activity with detailed context
+     */
+    public static function logArchivePageVisit(Request $request, string $pageType, array $contextParams = [])
+    {
+        $user = Auth::user();
+        
+        activity()
+            ->causedBy($user)
+            ->withProperties([
+                'url' => $request->fullUrl(),
+                'method' => $request->method(),
+                'ip' => $request->ip(),
+                'user_agent' => $request->userAgent(),
+                'page_type' => $pageType,
+                'page_context' => $contextParams,
+                'type' => 'archive_page_visit',
+                'action_type' => 'page_access',
+                'source' => 'admin'
+            ])
+            ->log("Archive page visit: {$pageType}");
+    }
+
+    /**
      * Log archive upload activity
      */
     public static function logArchiveUpload(Request $request, $archiveData = [])
